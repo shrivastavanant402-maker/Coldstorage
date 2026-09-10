@@ -1,9 +1,5 @@
 import api from '../api/client';
-<<<<<<< Updated upstream
-import { Shipment, Driver, RouteOption, AnalyzeShipmentResponse, Business, SimulateCallResponse, SingleShipmentSpoilageResponse, AgentChatRequest, AgentChatResponse } from '../types';
-=======
-import { Shipment, Driver, RouteOption, AnalyzeShipmentResponse, Business, SimulateCallResponse, SingleShipmentSpoilageResponse, FreshnessCheckResponse } from '../types';
->>>>>>> Stashed changes
+import { Shipment, Driver, RouteOption, AnalyzeShipmentResponse, Business, SimulateCallResponse, SingleShipmentSpoilageResponse, FreshnessCheckResponse, AgentChatRequest, AgentChatResponse } from '../types';
 
 export const FALLBACK_SHIPMENTS: Shipment[] = [
   {
@@ -257,11 +253,6 @@ export const coldChainApi = {
     return res.data;
   },
 
-<<<<<<< Updated upstream
-  async agentChat(req: AgentChatRequest): Promise<AgentChatResponse> {
-    // Let it throw so VoiceCallModal's local rule-based agent takes over
-    const res = await api.post<AgentChatResponse>('/api/agent-chat', req);
-=======
   async uploadFreshnessCheck(shipmentId: string, file: File): Promise<FreshnessCheckResponse> {
     const formData = new FormData();
     formData.append('file', file);
@@ -277,7 +268,12 @@ export const coldChainApi = {
     const res = await api.post<FreshnessCheckResponse>('/api/analyze-freshness', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
->>>>>>> Stashed changes
+    return res.data;
+  },
+
+  async agentChat(req: AgentChatRequest): Promise<AgentChatResponse> {
+    // Let it throw so VoiceCallModal's local rule-based agent takes over
+    const res = await api.post<AgentChatResponse>('/api/agent-chat', req);
     return res.data;
   },
 };
