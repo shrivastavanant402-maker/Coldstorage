@@ -1,4 +1,4 @@
-﻿/// <reference types="vite/client" />
+/// <reference types="vite/client" />
 
 interface ImportMetaEnv {
   readonly VITE_API_URL?: string;
@@ -8,3 +8,11 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+declare module 'cesium' {
+  export function createWorldTerrain(options?: {
+    requestWaterMask?: boolean;
+    requestVertexNormals?: boolean;
+  }): any;
+}
+

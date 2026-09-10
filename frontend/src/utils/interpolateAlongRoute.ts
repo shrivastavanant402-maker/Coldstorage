@@ -1,51 +1,57 @@
-﻿// utils/interpolateAlongRoute.ts
+// utils/interpolateAlongRoute.ts
 import * as Cesium from 'cesium';
 
-/**
- * Given a list of route coordinates and a progress value (0-1),
- * returns the interpolated position along the polyline.
- */
 export function getPositionAlongRoute(
-  coordinates: [number, number][],  // [[lon, lat], ...]
-  progress: number  // 0 to 1
+  coordinates: number[][],  // [[lon, lat, elev], ...]
+  progress: number,         // 0 to 1
+  viewer?: Cesium.Viewer | null
 ): Cesium.Cartesian3 {
   if (coordinates.length === 0) return Cesium.Cartesian3.ZERO;
   if (coordinates.length === 1) {
-    return Cesium.Cartesian3.fromDegrees(coordinates[0][0], coordinates[0][1], 0);
+    const [lon, lat, elev = 0] = coordinates[0];
+    if (viewer?.scene?.globe) {
+      const terrainHeight = viewer.scene.globe.getHeight(
+        Cesium.Cartographic.fromDegrees(lon, lat)
+      ) || 0;
+      return Cesium.Cartesian3.fromDegrees(lon, lat, terrainHeight + 2);
+    }
+    return Cesium.Cartesian3.fromDegrees(lon, lat, elev);
   }
 
-  // Calculate total length in segments
-  const totalPoints = coordinates.length - 1;
-  const scaledProgress = progress * totalPoints;
-  const segmentIndex = Math.min(Math.floor(scaledProgress), totalPoints - 1);
-  const segmentProgress = scaledProgress - segmentIndex;
+  const totalSegments = coordinates.length - 1;
+  const scaled = progress * totalSegments;
+  const idx = Math.min(Math.floor(scaled), totalSegments - 1);
+  const frac = scaled - idx;
 
-  const start = coordinates[segmentIndex];
-  const end = coordinates[segmentIndex + 1];
+  const [lon1, lat1, alt1 = 0] = coordinates[idx];
+  const [lon2, lat2, alt2 = 0] = coordinates[idx + 1];
 
-  // Interpolate between start and end
-  const lon = start[0] + (end[0] - start[0]) * segmentProgress;
-  const lat = start[1] + (end[1] - start[1]) * segmentProgress;
+  const lon = lon1 + (lon2 - lon1) * frac;
+  const lat = lat1 + (lat2 - lat1) * frac;
 
-  return Cesium.Cartesian3.fromDegrees(lon, lat, 0);
+  if (viewer?.scene?.globe) {
+    const terrainHeight = viewer.scene.globe.getHeight(
+      Cesium.Cartographic.fromDegrees(lon, lat)
+    ) || 0;
+    return Cesium.Cartesian3.fromDegrees(lon, lat, terrainHeight + 2);
+  }
+
+  const alt = alt1 + (alt2 - alt1) * frac;
+  return Cesium.Cartesian3.fromDegrees(lon, lat, alt + 3); // +3m to lift slightly above road
 }
 
-/**
- * Get heading (bearing) at a given progress point so vehicle faces forward.
- */
 export function getHeadingAlongRoute(
-  coordinates: [number, number][],
+  coordinates: number[][],
   progress: number
 ): number {
-  const totalPoints = coordinates.length - 1;
-  const scaledProgress = progress * totalPoints;
-  const segmentIndex = Math.min(Math.floor(scaledProgress), totalPoints - 1);
+  const totalSegments = coordinates.length - 1;
+  const scaled = progress * totalSegments;
+  const idx = Math.min(Math.floor(scaled), totalSegments - 1);
 
-  const start = coordinates[segmentIndex];
-  const end = coordinates[Math.min(segmentIndex + 1, totalPoints)];
+  const [lon1, lat1] = coordinates[idx];
+  const [lon2, lat2] = coordinates[idx + 1];
 
-  const dLon = end[0] - start[0];
-  const dLat = end[1] - start[1];
-  const heading = Math.atan2(dLon, dLat) * (180 / Math.PI);
-  return heading;
+  const dLon = lon2 - lon1;
+  const dLat = lat2 - lat1;
+  return Math.atan2(dLon, dLat) * (180 / Math.PI);
 }

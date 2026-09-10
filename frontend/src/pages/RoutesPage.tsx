@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useColdChainStore } from '../store/useColdChainStore';
-import { Search, Clock, Leaf, DollarSign, ShieldCheck, ArrowRight } from 'lucide-react';
+import { Search, Clock, Leaf, DollarSign, ShieldCheck, ArrowRight, Navigation } from 'lucide-react';
 import { RiskBadge } from '../components/RiskBadge';
-import { Globe3D } from '../components/globe/Globe3D';
+import Globe3D from '../components/Globe3D';
+import { Globe3D as MultiRouteGlobe } from '../components/globe/Globe3D';
 import { RoutePathData } from '../components/globe/RouteLayer';
+import { getRoute } from '../api/route';
 
 export const RoutesPage: React.FC = () => {
   const { routeOptions, findOptimalRoutes, isLoading } = useColdChainStore();
@@ -13,9 +15,24 @@ export const RoutesPage: React.FC = () => {
   const [goodsType, setGoodsType] = useState('Vaccines');
   const [vehicleType, setVehicleType] = useState('Refrigerated Semi-Trailer');
 
+  const [routeCoords, setRouteCoords] = useState<number[][]>([]);
+  const [activeView, setActiveView] = useState<'3d-chase' | 'overview'>('3d-chase');
+
+  const handleSearch = async () => {
+    const origin: [number, number] = [77.2090, 28.6139];  // Delhi [lon, lat]
+    const destination: [number, number] = [72.8777, 19.0760]; // Mumbai
+    const coords = await getRoute(origin, destination);
+    setRouteCoords(coords);
+  };
+
+  useEffect(() => {
+    handleSearch();
+  }, []);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     findOptimalRoutes(origin, destination, goodsType, vehicleType);
+    handleSearch();
   };
 
   const globeRoutes: RoutePathData[] = routeOptions.map((opt, i) => {
@@ -100,9 +117,64 @@ export const RoutesPage: React.FC = () => {
         </form>
       </div>
 
+      {/* 3D Visualizer & Globe Section */}
+      <div className="bg-white border border-[#E5E7EB] rounded-card p-5 shadow-subtle space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E5E7EB]">
+          <div>
+            <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              Geospatial Corridor & Vehicle Chase Simulator
+            </h4>
+            <p className="text-xs text-gray-500">
+              High-resolution 3D road following with Cesium World Terrain elevation and vehicle camera chase.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveView('3d-chase')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                activeView === '3d-chase'
+                  ? 'bg-[#4F46E5] text-white shadow-sm'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              Live 3D Road Chase
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveView('overview')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                activeView === 'overview'
+                  ? 'bg-[#181818] text-white shadow-sm'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              Corridor Network
+            </button>
+            <button
+              type="button"
+              onClick={handleSearch}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300 flex items-center gap-1 transition-all"
+              title="Fetch ORS Road Geometry"
+            >
+              <Search className="w-3.5 h-3.5 text-[#4F46E5]" />
+              Fetch Route
+            </button>
+          </div>
+        </div>
+
+        <div className="h-[460px] rounded-card overflow-hidden border border-[#E5E7EB] bg-[#0B0F19]">
+          {activeView === '3d-chase' ? (
+            <Globe3D routeCoordinates={routeCoords} />
+          ) : (
+            <MultiRouteGlobe routes={globeRoutes} height="460px" />
+          )}
+        </div>
+      </div>
+
       {routeOptions.length > 0 && (
         <div className="space-y-4">
-          <Globe3D routes={globeRoutes} height="400px" />
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {routeOptions.map((route, idx) => (
               <div

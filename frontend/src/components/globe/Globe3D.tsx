@@ -89,19 +89,21 @@ export const Globe3D: React.FC<Globe3DProps> = ({
   useEffect(() => {
     const viewer = viewerRef.current?.cesiumElement;
     if (viewer) {
-      const createTerrain = (CesiumMath as any).createWorldTerrainAsync || (CesiumMath as any).createWorldTerrain;
-      // Also try Ion/Terrain loaders
       import('cesium').then((c) => {
-        const createFn = c.createWorldTerrainAsync || (c as any).createWorldTerrain;
-        if (createFn) {
-          Promise.resolve(
-            createFn({
-              requestWaterMask: false,
-              requestVertexNormals: true,
-            })
-          ).then((provider: any) => {
+        if (typeof (c as any).createWorldTerrain === 'function') {
+          viewer.terrainProvider = (c as any).createWorldTerrain({
+            requestWaterMask: false,
+            requestVertexNormals: true,
+          });
+          console.log('Terrain provider set:', viewer.terrainProvider);
+        } else if (typeof (c as any).createWorldTerrainAsync === 'function') {
+          (c as any).createWorldTerrainAsync({
+            requestWaterMask: false,
+            requestVertexNormals: true,
+          }).then((provider: any) => {
             if (viewer && !viewer.isDestroyed() && provider) {
               viewer.terrainProvider = provider;
+              console.log('Terrain provider set:', viewer.terrainProvider);
             }
           }).catch(() => {});
         }
