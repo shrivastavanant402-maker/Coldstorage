@@ -56,6 +56,31 @@ def generate_mock_shipments(n: int = 200) -> List[Shipment]:
 
         humidity = round(random.uniform(50.0, 88.0), 1)
 
+        # Produce cargo sample freshness check
+        freshness_score = None
+        freshness_summary = None
+        freshness_status = None
+        freshness_checked_at = None
+        freshness_identified_produce = None
+        freshness_spoilage_risk = None
+        freshness_image_url = None
+
+        if goods_type == "Fresh Produce":
+            if i % 3 == 0:
+                freshness_score = 92
+                freshness_summary = "Crisp organic produce with intact skin, vibrant coloration, and high moisture retention. Inspected at departure dock."
+                freshness_status = "completed"
+                freshness_checked_at = "2026-09-10T08:30:00Z"
+                freshness_identified_produce = "Valencia Oranges & Greens"
+                freshness_spoilage_risk = "low"
+            elif i % 3 == 1:
+                freshness_score = 64
+                freshness_summary = "Minor surface moisture condensation and slight stem softening detected. Suitable for transit with continuous reefer ventilation."
+                freshness_status = "completed"
+                freshness_checked_at = "2026-09-10T07:15:00Z"
+                freshness_identified_produce = "Vine Tomatoes"
+                freshness_spoilage_risk = "medium"
+
         shipments.append(Shipment(
             shipment_id=shp_id,
             origin=origin,
@@ -70,10 +95,18 @@ def generate_mock_shipments(n: int = 200) -> List[Shipment]:
             weather_severity=weather_severity,
             delay_history=delay_history,
             spoilage_flag=spoilage_flag,
-            status="In Transit" if i <= 20 else "Delivered"
+            status="In Transit" if i <= 20 else "Delivered",
+            freshness_image_url=freshness_image_url,
+            freshness_score=freshness_score,
+            freshness_summary=freshness_summary,
+            freshness_checked_at=freshness_checked_at,
+            freshness_status=freshness_status,
+            freshness_identified_produce=freshness_identified_produce,
+            freshness_spoilage_risk=freshness_spoilage_risk
         ))
 
     return shipments
+
 
 def generate_mock_drivers() -> List[Driver]:
     return [

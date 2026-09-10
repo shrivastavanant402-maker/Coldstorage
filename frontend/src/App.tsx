@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
 import { ShipmentModal } from './components/ShipmentModal';
+import { FreshnessModal } from './components/FreshnessModal';
 import { DashboardPage } from './pages/DashboardPage';
 import { RoutesPage } from './pages/RoutesPage';
 import { ShipmentsPage } from './pages/ShipmentsPage';
@@ -21,9 +22,11 @@ const ConsoleLayout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         </main>
       </div>
       <ShipmentModal />
+      <FreshnessModal />
     </div>
   );
 };
+
 
 export const App: React.FC = () => {
   return (

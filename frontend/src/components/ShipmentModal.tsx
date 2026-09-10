@@ -1,10 +1,10 @@
 import React from 'react';
 import { useColdChainStore } from '../store/useColdChainStore';
-import { X, PhoneCall } from 'lucide-react';
-import { RiskBadge, TimeRemainingBadge } from './RiskBadge';
+import { X, PhoneCall, Sparkles, Camera, Image as ImageIcon } from 'lucide-react';
+import { RiskBadge, TimeRemainingBadge, FreshnessBadge } from './RiskBadge';
 
 export const ShipmentModal: React.FC = () => {
-  const { isModalOpen, selectedModalShipment, modalAnalysis, closeShipmentModal, openEmergencyModal } = useColdChainStore();
+  const { isModalOpen, selectedModalShipment, modalAnalysis, closeShipmentModal, openEmergencyModal, openFreshnessModal } = useColdChainStore();
 
   if (!isModalOpen || !selectedModalShipment) return null;
 
@@ -16,7 +16,7 @@ export const ShipmentModal: React.FC = () => {
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-[#FFFDF8] rounded-[28px] md:rounded-[36px] border border-[#D9D7D0] shadow-2xl w-full max-w-xl p-7 relative">
+      <div className="bg-[#FFFDF8] rounded-[28px] md:rounded-[36px] border border-[#D9D7D0] shadow-2xl w-full max-w-xl p-6 md:p-7 relative max-h-[90vh] overflow-y-auto">
         <div className="flex items-start justify-between border-b border-[#D9D7D0] pb-4 mb-5">
           <div>
             <div className="flex flex-wrap items-center gap-2.5 mb-1.5">
@@ -46,6 +46,7 @@ export const ShipmentModal: React.FC = () => {
           </button>
         </div>
 
+        {/* Telemetry Metrics */}
         <div className="grid grid-cols-3 gap-3 mb-5 text-xs">
           <div className="p-3 bg-[#F0EFEB] rounded-2xl border border-[#D9D7D0]">
             <span className="text-[#8C8880] block text-[10px] font-semibold uppercase tracking-wider mb-1">Cargo Temp</span>
@@ -61,11 +62,67 @@ export const ShipmentModal: React.FC = () => {
           </div>
         </div>
 
+        {/* AI Freshness Inspection Card (Gemini Multimodal) */}
+        <div className="mb-5 p-4 rounded-2xl bg-[#FAF9F5] border border-[#D9D7D0] space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-[#1B1B1B]">
+              <Sparkles className="w-4 h-4 text-indigo-600" />
+              <span>AI Visual Produce Freshness Assessment</span>
+            </div>
+            <FreshnessBadge
+              score={selectedModalShipment.freshness_score}
+              status={selectedModalShipment.freshness_status}
+            />
+          </div>
+
+          {selectedModalShipment.freshness_status === 'completed' ? (
+            <div className="space-y-2 text-xs">
+              <div className="flex items-start gap-3">
+                {selectedModalShipment.freshness_image_url && (
+                  <div className="w-16 h-16 rounded-xl overflow-hidden border border-[#D9D7D0] shrink-0 bg-black/5">
+                    <img
+                      src={selectedModalShipment.freshness_image_url}
+                      alt="Produce inspection"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
+                <div className="flex-1">
+                  <div className="flex items-center justify-between text-[11px] text-[#8C8880] mb-1">
+                    <span>Produce: <strong className="text-[#1B1B1B]">{selectedModalShipment.freshness_identified_produce || selectedModalShipment.goods_type}</strong></span>
+                    {selectedModalShipment.freshness_checked_at && (
+                      <span>Inspected: {new Date(selectedModalShipment.freshness_checked_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-[#615E58] leading-relaxed bg-white p-2.5 rounded-xl border border-[#E9E8E4]">
+                    {selectedModalShipment.freshness_summary}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between text-xs text-[#8C8880] bg-white p-3 rounded-xl border border-[#E9E8E4]">
+              <span>No departure photo captured yet for this consignment.</span>
+              <button
+                type="button"
+                onClick={() => {
+                  closeShipmentModal();
+                  openFreshnessModal(selectedModalShipment);
+                }}
+                className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-[11px] font-semibold flex items-center gap-1"
+              >
+                <Camera className="w-3 h-3" /> Inspect Now
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* AI Transit Risk Factor Contributions */}
         <div className="mb-5">
           <h4 className="text-xs font-semibold text-[#1B1B1B] uppercase tracking-wider mb-2.5">
-            AI Risk Factor Contributions
+            AI Transit Risk Factor Contributions
           </h4>
-          <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+          <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
             {modalAnalysis?.explanation_breakdown.map((item, idx) => (
               <div
                 key={idx}
@@ -118,3 +175,4 @@ export const ShipmentModal: React.FC = () => {
     </div>
   );
 };
+

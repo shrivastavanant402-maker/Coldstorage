@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useColdChainStore } from '../store/useColdChainStore';
-import { RiskBadge } from '../components/RiskBadge';
-import { Search, Filter, Thermometer, UserPlus, Zap } from 'lucide-react';
+import { RiskBadge, FreshnessBadge } from '../components/RiskBadge';
+import { Search, Filter, Thermometer, UserPlus, Zap, Sparkles } from 'lucide-react';
 import { AssignDriverModal } from '../components/AssignDriverModal';
 import { EmergencySalvageModal } from '../components/EmergencySalvageModal';
 
@@ -30,7 +30,7 @@ export const ShipmentsPage: React.FC = () => {
         <div>
           <h3 className="text-base font-semibold text-gray-900">Cargo Fleet Manifest</h3>
           <p className="text-xs text-gray-500">
-            Real-time IoT telemetry, automated driver assignment, and AI salvage mitigation.
+            Real-time IoT telemetry, AI visual produce inspection, and automated mitigation.
           </p>
         </div>
 
@@ -80,7 +80,8 @@ export const ShipmentsPage: React.FC = () => {
                 <th className="px-4 py-2.5">Origin / Destination</th>
                 <th className="px-4 py-2.5">Cargo</th>
                 <th className="px-4 py-2.5">Cargo Temp</th>
-                <th className="px-4 py-2.5">Risk Level</th>
+                <th className="px-4 py-2.5">Thermal Risk</th>
+                <th className="px-4 py-2.5">AI Freshness (Pickup)</th>
                 <th className="px-4 py-2.5">Status</th>
                 <th className="px-4 py-2.5 text-right">Action</th>
               </tr>
@@ -105,6 +106,9 @@ export const ShipmentsPage: React.FC = () => {
                   </td>
                   <td onClick={() => openShipmentModal(s)} className="px-4 py-2.5 cursor-pointer">
                     <RiskBadge level={s.risk_level} score={s.risk_score} />
+                  </td>
+                  <td onClick={() => openShipmentModal(s)} className="px-4 py-2.5 cursor-pointer">
+                    <FreshnessBadge score={s.freshness_score} status={s.freshness_status} />
                   </td>
                   <td className="px-4 py-2.5">
                     <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-medium ${
@@ -146,3 +150,4 @@ export const ShipmentsPage: React.FC = () => {
     </div>
   );
 };
+

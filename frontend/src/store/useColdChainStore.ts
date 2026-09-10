@@ -44,7 +44,17 @@ interface ColdChainState {
   approveDeal: () => void;
   denyDeal: () => void;
   startDriverTrip: (shipmentId: string) => void;
+
+  // Freshness Assessment
+  isFreshnessModalOpen: boolean;
+  freshnessTargetShipment: Shipment | null;
+  isAnalyzingFreshness: boolean;
+  freshnessResult: any | null;
+  openFreshnessModal: (shipment: Shipment) => void;
+  closeFreshnessModal: () => void;
+  submitFreshnessCheck: (shipmentId: string, file: File) => Promise<any>;
 }
+
 
 export const useColdChainStore = create<ColdChainState>((set, get) => ({
   userRole: 'owner',
@@ -247,4 +257,77 @@ export const useColdChainStore = create<ColdChainState>((set, get) => ({
       ),
     }));
   },
+
+  // Freshness Assessment state & actions
+  isFreshnessModalOpen: false,
+  freshnessTargetShipment: null,
+  isAnalyzingFreshness: false,
+  freshnessResult: null,
+
+  openFreshnessModal: (shipment: Shipment) => {
+    set({
+      isFreshnessModalOpen: true,
+      freshnessTargetShipment: shipment,
+      freshnessResult: null,
+      isAnalyzingFreshness: false,
+    });
+  },
+
+  closeFreshnessModal: () => {
+    set({
+      isFreshnessModalOpen: false,
+      freshnessTargetShipment: null,
+      freshnessResult: null,
+      isAnalyzingFreshness: false,
+    });
+  },
+
+  submitFreshnessCheck: async (shipmentId: string, file: File) => {
+    set({ isAnalyzingFreshness: true, freshnessResult: null });
+    try {
+      const result = await coldChainApi.uploadFreshnessCheck(shipmentId, file);
+      set((state) => ({
+        isAnalyzingFreshness: false,
+        freshnessResult: result,
+        shipments: state.shipments.map((s) =>
+          s.shipment_id === shipmentId
+            ? {
+                ...s,
+                freshness_score: result.freshness_score,
+                freshness_summary: result.freshness_summary,
+                freshness_status: result.freshness_status,
+                freshness_checked_at: result.freshness_checked_at,
+                freshness_image_url: result.freshness_image_url,
+                freshness_identified_produce: result.identified_produce,
+                freshness_spoilage_risk: result.spoilage_risk,
+              }
+            : s
+        ),
+      }));
+      return result;
+    } catch (err: any) {
+      const failResult = {
+        shipment_id: shipmentId,
+        freshness_score: null,
+        freshness_summary: err?.message || 'Network error during freshness check. Please retry.',
+        freshness_status: 'failed' as const,
+        freshness_checked_at: new Date().toISOString(),
+      };
+      set((state) => ({
+        isAnalyzingFreshness: false,
+        freshnessResult: failResult,
+        shipments: state.shipments.map((s) =>
+          s.shipment_id === shipmentId
+            ? {
+                ...s,
+                freshness_status: 'failed',
+                freshness_summary: failResult.freshness_summary,
+              }
+            : s
+        ),
+      }));
+      return failResult;
+    }
+  },
 }));
+

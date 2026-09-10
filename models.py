@@ -19,6 +19,14 @@ class Shipment(BaseModel):
     spoilage_flag: Optional[int] = 0
     assigned_driver_id: Optional[str] = None
     status: Optional[str] = "Pending"
+    # Freshness Check Fields
+    freshness_image_url: Optional[str] = None
+    freshness_score: Optional[int] = None
+    freshness_summary: Optional[str] = None
+    freshness_checked_at: Optional[str] = None
+    freshness_status: Optional[str] = None  # "pending", "completed", "failed"
+    freshness_identified_produce: Optional[str] = None
+    freshness_spoilage_risk: Optional[str] = None  # "low", "medium", "high"
 
 class Driver(BaseModel):
     driver_id: str
@@ -177,3 +185,14 @@ class WeatherResponse(BaseModel):
     wind_speed: float
     source: str
     alerts: List[str] = []
+
+class FreshnessCheckResponse(BaseModel):
+    shipment_id: Optional[str] = None
+    freshness_score: Optional[int] = None
+    freshness_summary: str
+    freshness_status: str  # "completed" | "failed"
+    freshness_checked_at: str
+    freshness_image_url: Optional[str] = None
+    identified_produce: Optional[str] = None
+    spoilage_risk: Optional[str] = None
+    raw_response: Optional[Dict[str, Any]] = None

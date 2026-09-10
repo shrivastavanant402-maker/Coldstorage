@@ -1,4 +1,5 @@
 import io
+import base64
 import datetime
 from typing import List, Optional
 import pandas as pd
@@ -13,13 +14,18 @@ from models import (
     PredictSpoilageResponse, SingleShipmentSpoilageResponse,
     AssignShipmentRequest, AssignShipmentResponse,
     SimulateCallRequest, SimulateCallResponse, DialogueTurn,
+<<<<<<< Updated upstream
     AgentChatRequest, AgentChatResponse, AgentChatMessage,
     WeatherResponse
+=======
+    WeatherResponse, FreshnessCheckResponse
+>>>>>>> Stashed changes
 )
 from mock_data import generate_mock_shipments, generate_mock_drivers, generate_mock_businesses
 from ml_service import ColdChainRiskModel, FEATURE_COLS
 from route_service import generate_route_options
 from weather_service import fetch_weather_for_location
+from freshness_service import analyze_freshness
 
 # Initialize FastAPI application
 app = FastAPI(
@@ -476,3 +482,62 @@ def list_shipments(limit: int = 50, status: Optional[str] = None):
     if status:
         results = [s for s in results if s.status.lower() == status.lower()]
     return results[:limit]
+
+# 10. POST /api/shipments/{shipment_id}/freshness-check
+@app.post("/api/shipments/{shipment_id}/freshness-check", response_model=FreshnessCheckResponse, tags=["Freshness Inspection"])
+async def check_shipment_freshness(shipment_id: str, file: UploadFile = File(...)):
+    shipment = next((s for s in db_shipments if s.shipment_id.upper() == shipment_id.upper()), None)
+    if not shipment:
+        raise HTTPException(status_code=404, detail=f"Shipment '{shipment_id}' not found.")
+
+    image_bytes = await file.read()
+    mime_type = file.content_type or "image/jpeg"
+
+    # Analyze freshness via isolated Gemini module
+    analysis = await analyze_freshness(image_bytes=image_bytes, mime_type=mime_type)
+
+    # Convert image to data URI for immediate persistent thumbnail display
+    data_uri = f"data:{mime_type};base64,{base64.b64encode(image_bytes).decode('utf-8')}"
+
+    # Update shipment in-memory state
+    shipment.freshness_score = analysis.get("freshness_score")
+    shipment.freshness_summary = analysis.get("summary")
+    shipment.freshness_status = analysis.get("freshness_status")
+    shipment.freshness_checked_at = analysis.get("freshness_checked_at")
+    shipment.freshness_identified_produce = analysis.get("identified_produce")
+    shipment.freshness_spoilage_risk = analysis.get("spoilage_risk")
+    shipment.freshness_image_url = data_uri
+
+    return FreshnessCheckResponse(
+        shipment_id=shipment.shipment_id,
+        freshness_score=shipment.freshness_score,
+        freshness_summary=shipment.freshness_summary or "",
+        freshness_status=shipment.freshness_status or "failed",
+        freshness_checked_at=shipment.freshness_checked_at or datetime.datetime.utcnow().isoformat(),
+        freshness_image_url=data_uri,
+        identified_produce=shipment.freshness_identified_produce,
+        spoilage_risk=shipment.freshness_spoilage_risk,
+        raw_response=analysis.get("raw_response")
+    )
+
+# 11. POST /api/analyze-freshness (Direct ad-hoc image inspection)
+@app.post("/api/analyze-freshness", response_model=FreshnessCheckResponse, tags=["Freshness Inspection"])
+async def analyze_freshness_direct(file: UploadFile = File(...)):
+    image_bytes = await file.read()
+    mime_type = file.content_type or "image/jpeg"
+
+    analysis = await analyze_freshness(image_bytes=image_bytes, mime_type=mime_type)
+    data_uri = f"data:{mime_type};base64,{base64.b64encode(image_bytes).decode('utf-8')}"
+
+    return FreshnessCheckResponse(
+        shipment_id=None,
+        freshness_score=analysis.get("freshness_score"),
+        freshness_summary=analysis.get("summary", ""),
+        freshness_status=analysis.get("freshness_status", "failed"),
+        freshness_checked_at=analysis.get("freshness_checked_at", datetime.datetime.utcnow().isoformat()),
+        freshness_image_url=data_uri,
+        identified_produce=analysis.get("identified_produce"),
+        spoilage_risk=analysis.get("spoilage_risk"),
+        raw_response=analysis.get("raw_response")
+    )
+

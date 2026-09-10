@@ -1,11 +1,18 @@
 import React from 'react';
 import { useColdChainStore } from '../store/useColdChainStore';
-import { Truck, MapPin, Phone, AlertCircle, CheckCircle2, Play, Thermometer } from 'lucide-react';
-import { RiskBadge } from '../components/RiskBadge';
+import { Truck, MapPin, Phone, AlertCircle, CheckCircle2, Play, Thermometer, Camera, Sparkles, Eye } from 'lucide-react';
+import { RiskBadge, FreshnessBadge } from '../components/RiskBadge';
+import { FreshnessModal } from '../components/FreshnessModal';
 
 export const DriverPage: React.FC = () => {
-  const { drivers, selectedDriverId, setSelectedDriverId, shipments, startDriverTrip } =
-    useColdChainStore();
+  const {
+    drivers,
+    selectedDriverId,
+    setSelectedDriverId,
+    shipments,
+    startDriverTrip,
+    openFreshnessModal,
+  } = useColdChainStore();
 
   const currentDriver = drivers.find((d) => d.driver_id === selectedDriverId) || drivers[0];
   const driverShipments = shipments.filter((s) => s.assigned_driver_id === currentDriver?.driver_id);
@@ -81,33 +88,80 @@ export const DriverPage: React.FC = () => {
             {driverShipments.map((shp) => (
               <div
                 key={shp.shipment_id}
-                className="p-3.5 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs"
+                className="p-4 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs"
               >
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
+                <div className="space-y-1.5">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="font-bold text-gray-900">{shp.shipment_id}</span>
                     <span className="text-gray-500 font-medium">({shp.goods_type})</span>
                     <RiskBadge level={shp.risk_level} score={shp.risk_score} />
+                    {shp.freshness_status && (
+                      <FreshnessBadge
+                        score={shp.freshness_score}
+                        status={shp.freshness_status}
+                      />
+                    )}
                   </div>
                   <p className="text-gray-600">
                     {shp.origin} → {shp.destination} • {shp.distance_km} km
                   </p>
-                  <div className="flex items-center gap-3 text-gray-500 mt-1 font-mono text-[11px]">
+                  <div className="flex flex-wrap items-center gap-3 text-gray-500 font-mono text-[11px]">
                     <span className="flex items-center gap-1">
                       <Thermometer className="w-3 h-3 text-[#0D9488]" />
                       Reefer: {shp.avg_temperature}°C
                     </span>
                     <span>ETA: {shp.transit_hours} hrs</span>
+                    {shp.freshness_identified_produce && (
+                      <span className="text-indigo-600 font-semibold">
+                        Produce: {shp.freshness_identified_produce}
+                      </span>
+                    )}
                   </div>
+
+                  {/* Freshness summary preview */}
+                  {shp.freshness_summary && (
+                    <p className="text-[11px] text-gray-600 italic bg-white p-2 rounded-lg border border-gray-200 mt-1 max-w-xl">
+                      "{shp.freshness_summary}"
+                    </p>
+                  )}
                 </div>
 
-                <div>
+                <div className="flex flex-wrap items-center gap-2 self-start md:self-auto shrink-0">
+                  {/* Photo Capture / Freshness Check Action */}
                   <button
-                    onClick={() => startDriverTrip(shp.shipment_id)}
-                    className="px-3.5 py-1.5 bg-[#4F46E5] hover:bg-indigo-700 text-white rounded-lg text-xs font-medium flex items-center gap-1 transition-colors shadow-sm"
+                    type="button"
+                    onClick={() => openFreshnessModal(shp)}
+                    className="px-3 py-1.5 bg-white hover:bg-gray-50 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs"
                   >
-                    <Play className="w-3 h-3" /> Start Trip
+                    <Camera className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>{shp.freshness_status === 'completed' ? 'Re-inspect Produce' : 'AI Freshness Check'}</span>
                   </button>
+
+                  {/* Start Trip Action */}
+                  {shp.status !== 'In Transit' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!shp.freshness_status) {
+                          // Prompt freshness check first on starting shipment
+                          openFreshnessModal(shp);
+                        } else {
+                          startDriverTrip(shp.shipment_id);
+                        }
+                      }}
+                      className="px-3.5 py-1.5 bg-[#4F46E5] hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
+                    >
+                      <Play className="w-3.5 h-3.5" />
+                      <span>Start Trip</span>
+                    </button>
+                  )}
+
+                  {shp.status === 'In Transit' && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[11px] font-bold">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      In Transit
+                    </span>
+                  )}
                 </div>
               </div>
             ))}
@@ -134,6 +188,10 @@ export const DriverPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Freshness Inspection Modal */}
+      <FreshnessModal />
     </div>
   );
 };
+

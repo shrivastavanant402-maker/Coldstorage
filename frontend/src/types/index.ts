@@ -16,7 +16,27 @@ export interface Shipment {
   risk_level?: 'Low' | 'Medium' | 'High' | 'Critical';
   status: 'In Transit' | 'Pending' | 'Delivered' | 'At Risk' | 'Assigned' | 'Salvaged';
   assigned_driver_id?: string | null;
+  // Freshness Assessment (Gemini Multimodal)
+  freshness_image_url?: string | null;
+  freshness_score?: number | null;
+  freshness_summary?: string | null;
+  freshness_checked_at?: string | null;
+  freshness_status?: 'pending' | 'completed' | 'failed' | null;
+  freshness_identified_produce?: string | null;
+  freshness_spoilage_risk?: 'low' | 'medium' | 'high' | null;
 }
+
+export interface FreshnessCheckResponse {
+  shipment_id?: string | null;
+  freshness_score: number | null;
+  freshness_summary: string;
+  freshness_status: 'completed' | 'failed';
+  freshness_checked_at: string;
+  freshness_image_url?: string | null;
+  identified_produce?: string | null;
+  spoilage_risk?: 'low' | 'medium' | 'high' | null;
+}
+
 
 export interface Driver {
   driver_id: string;

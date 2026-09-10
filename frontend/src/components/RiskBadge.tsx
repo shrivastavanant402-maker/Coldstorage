@@ -49,3 +49,48 @@ export const TimeRemainingBadge: React.FC<TimeRemainingProps> = ({ etaHours, spo
     </span>
   );
 };
+
+interface FreshnessBadgeProps {
+  score?: number | null;
+  status?: 'pending' | 'completed' | 'failed' | string | null;
+  showIcon?: boolean;
+}
+
+export const FreshnessBadge: React.FC<FreshnessBadgeProps> = ({ score, status = 'completed' }) => {
+  if (status === 'failed') {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-200">
+        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+        Freshness Check Failed
+      </span>
+    );
+  }
+
+  if (status === 'pending' || score === undefined || score === null) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-600 border border-gray-200">
+        <span className="w-1.5 h-1.5 rounded-full bg-gray-400 shrink-0" />
+        Unchecked
+      </span>
+    );
+  }
+
+  let style = 'bg-emerald-50 text-emerald-800 border-emerald-300';
+  let label = 'Optimal Freshness';
+
+  if (score < 40) {
+    style = 'bg-rose-50 text-rose-800 border-rose-300';
+    label = 'Degraded Quality';
+  } else if (score <= 70) {
+    style = 'bg-amber-50 text-amber-800 border-amber-300';
+    label = 'Moderate Freshness';
+  }
+
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] border font-bold tracking-wider ${style}`}>
+      <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" />
+      <span>{score}% {label}</span>
+    </span>
+  );
+};
+
