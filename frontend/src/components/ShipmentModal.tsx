@@ -1,7 +1,7 @@
 import React from 'react';
 import { useColdChainStore } from '../store/useColdChainStore';
 import { X } from 'lucide-react';
-import { RiskBadge } from './RiskBadge';
+import { RiskBadge, TimeRemainingBadge } from './RiskBadge';
 
 export const ShipmentModal: React.FC = () => {
   const { isModalOpen, selectedModalShipment, modalAnalysis, closeShipmentModal } = useColdChainStore();
@@ -13,7 +13,7 @@ export const ShipmentModal: React.FC = () => {
       <div className="bg-[#FFFDF8] rounded-[28px] md:rounded-[36px] border border-[#D9D7D0] shadow-2xl w-full max-w-xl p-7 relative">
         <div className="flex items-start justify-between border-b border-[#D9D7D0] pb-4 mb-5">
           <div>
-            <div className="flex items-center gap-2.5 mb-1.5">
+            <div className="flex flex-wrap items-center gap-2.5 mb-1.5">
               <h3 className="font-display text-lg font-bold text-[#1B1B1B]">
                 Diagnostic: {selectedModalShipment.shipment_id}
               </h3>
@@ -21,6 +21,12 @@ export const ShipmentModal: React.FC = () => {
                 level={modalAnalysis?.risk_level || selectedModalShipment.risk_level || 'Low'}
                 score={modalAnalysis?.risk_score}
               />
+              {modalAnalysis?.eta_hours !== undefined && modalAnalysis?.time_to_spoilage_hours !== undefined && (
+                <TimeRemainingBadge
+                  etaHours={modalAnalysis.eta_hours}
+                  spoilageHours={modalAnalysis.time_to_spoilage_hours}
+                />
+              )}
             </div>
             <p className="text-xs text-[#8C8880] font-medium">
               {selectedModalShipment.goods_type} • {selectedModalShipment.origin} → {selectedModalShipment.destination}

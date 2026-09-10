@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from typing import Dict, Any, List, Tuple
 from models import FeatureContribution
+from mock_data import GOODS_SPECIFICATIONS
 
 try:
     from sklearn.ensemble import RandomForestClassifier
@@ -156,3 +157,75 @@ class ColdChainRiskModel:
 
         explanation.sort(key=lambda x: abs(x.contribution_score), reverse=True)
         return risk_score, risk_level, confidence, explanation
+
+    def predict_eta_hours(self, feature_values: Dict[str, float]) -> float:
+        """
+        Predict estimated time of arrival in hours.
+        Uses a linear regression-style combination:
+          base = transit_hours (scheduled transit)
+          + weather_severity penalty (severe weather slows delivery)
+          + delay_history (historical delays for this corridor)
+          + distance correction (longer routes have proportionally more variability)
+        """
+        transit_hours = feature_values.get('transit_hours', 12.0)
+        weather_severity = feature_values.get('weather_severity', 1.5)
+        delay_history = feature_values.get('delay_history', 0.0)
+        distance_km = feature_values.get('distance_km', 800.0)
+
+        # Base ETA is the scheduled transit time
+        eta = transit_hours
+
+        # Weather penalty: each severity point above 2.0 adds ~8% to transit
+        if weather_severity > 2.0:
+            eta += (weather_severity - 2.0) * transit_hours * 0.08
+
+        # Delay history: add historical average delay directly
+        eta += delay_history * 0.6
+
+        # Distance variability: longer routes have ±2% per 500km above 800km
+        if distance_km > 800.0:
+            eta += ((distance_km - 800.0) / 500.0) * 0.4
+
+        return round(max(1.0, eta), 1)
+
+    def predict_time_to_spoilage_hours(self, feature_values: Dict[str, float], goods_type: str = "Fresh Produce") -> float:
+        """
+        Predict hours remaining before cargo spoilage at current conditions.
+        Uses goods-specific temperature tolerance from GOODS_SPECIFICATIONS:
+          - Calculates how far current temp deviates from target
+          - Higher variance accelerates spoilage
+          - Base shelf life decays exponentially with thermal abuse
+        """
+        avg_temp = feature_values.get('avg_temperature', 4.0)
+        temp_variance = feature_values.get('temp_variance', 1.0)
+        humidity = feature_values.get('humidity', 65.0)
+
+        spec = GOODS_SPECIFICATIONS.get(goods_type, {"target_temp": 4.0, "temp_tolerance": 2.5, "base_risk": 10})
+        target_temp = spec["target_temp"]
+        tolerance = spec["temp_tolerance"]
+
+        # Base shelf life in hours for cold-chain goods (48h nominal)
+        base_shelf_life = 48.0
+
+        # Temperature deviation from target (absolute)
+        temp_deviation = abs(avg_temp - target_temp)
+
+        # Decay factor: beyond tolerance, spoilage accelerates exponentially
+        if temp_deviation <= tolerance:
+            # Within tolerance: slow linear decay
+            thermal_factor = 1.0 - (temp_deviation / tolerance) * 0.15
+        else:
+            # Beyond tolerance: exponential decay
+            excess = temp_deviation - tolerance
+            thermal_factor = 0.85 * (0.65 ** (excess / tolerance))
+
+        # Variance penalty: high variance means unreliable cooling
+        variance_factor = max(0.3, 1.0 - (temp_variance / 6.0))
+
+        # Humidity factor: high humidity slightly accelerates bacterial growth
+        humidity_factor = max(0.8, 1.0 - max(0.0, (humidity - 70.0)) * 0.003)
+
+        spoilage_hours = base_shelf_life * thermal_factor * variance_factor * humidity_factor
+
+        return round(max(1.0, spoilage_hours), 1)
+

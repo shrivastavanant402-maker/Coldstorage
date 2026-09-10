@@ -89,6 +89,8 @@ export interface AnalyzeShipmentResponse {
   confidence: number;
   explanation_breakdown: FeatureContribution[];
   summary: string;
+  eta_hours?: number;
+  time_to_spoilage_hours?: number;
 }
 
 export interface SavingsState {

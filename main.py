@@ -81,6 +81,13 @@ def analyze_shipment(req: AnalyzeShipmentRequest):
     }
     risk_score, risk_level, confidence, explanation = ml_model.predict_risk(features)
 
+    # ETA prediction needs delay_history in addition to standard features
+    eta_features = {**features, 'delay_history': req.delay_history or 0.0}
+    eta_hours = ml_model.predict_eta_hours(eta_features)
+
+    # Time-to-spoilage prediction uses goods_type for temperature tolerance lookup
+    spoilage_hours = ml_model.predict_time_to_spoilage_hours(features, goods_type=req.goods_type)
+
     summary = (
         f"Shipment {req.shipment_id} ({req.goods_type}) has a {risk_level.upper()} spoilage risk of {risk_score}%. "
         f"Primary risk driver is {explanation[0].feature if explanation else 'ambient temperature'}."
@@ -92,7 +99,9 @@ def analyze_shipment(req: AnalyzeShipmentRequest):
         risk_level=risk_level,
         confidence=confidence,
         explanation_breakdown=explanation,
-        summary=summary
+        summary=summary,
+        eta_hours=eta_hours,
+        time_to_spoilage_hours=spoilage_hours
     )
 
 # 2. POST /api/optimize-route

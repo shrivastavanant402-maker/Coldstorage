@@ -67,6 +67,8 @@ class AnalyzeShipmentResponse(BaseModel):
     confidence: float
     explanation_breakdown: List[FeatureContribution]
     summary: str
+    eta_hours: float = 0.0
+    time_to_spoilage_hours: float = 0.0
 
 class OptimizeRouteRequest(BaseModel):
     origin: str

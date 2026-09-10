@@ -176,6 +176,8 @@ export const coldChainApi = {
         confidence: 0.94,
         explanation_breakdown: [],
         summary: 'Nominal cold-chain metrics observed.',
+        eta_hours: shipment.transit_hours || 12.0,
+        time_to_spoilage_hours: 10.0, // Mocked to show yellow/red risk depending on ETA
       };
     }
   },
