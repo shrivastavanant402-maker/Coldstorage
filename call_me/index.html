@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Twilio Call Me</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      background: radial-gradient(circle at top right, #1e1e38, #0f0f1a 80%);
+      color: #f1f5f9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-radius: 20px;
+      padding: 40px 36px;
+      max-width: 440px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.45);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .icon-wrapper {
+      width: 68px;
+      height: 68px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px auto;
+      font-size: 28px;
+      box-shadow: 0 8px 24px rgba(59, 130, 246, 0.35);
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #ffffff;
+      letter-spacing: -0.02em;
+    }
+
+    p.subtitle {
+      font-size: 14px;
+      color: #94a3b8;
+      line-height: 1.5;
+      margin-bottom: 28px;
+    }
+
+    .call-btn {
+      width: 100%;
+      padding: 16px 24px;
+      font-size: 16px;
+      font-weight: 600;
+      font-family: inherit;
+      color: #ffffff;
+      background: linear-gradient(135deg, #2563eb, #7c3aed);
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: all 0.2s ease;
+      box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+    }
+
+    .call-btn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px rgba(37, 99, 235, 0.5);
+      filter: brightness(1.08);
+    }
+
+    .call-btn:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    .call-btn:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .status-box {
+      margin-top: 24px;
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      display: none;
+      text-align: left;
+      line-height: 1.4;
+      word-break: break-word;
+    }
+
+    .status-box.info {
+      display: block;
+      background: rgba(59, 130, 246, 0.15);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      color: #93c5fd;
+    }
+
+    .status-box.success {
+      display: block;
+      background: rgba(34, 197, 94, 0.15);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      color: #86efac;
+    }
+
+    .status-box.error {
+      display: block;
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+    }
+
+    .meta {
+      margin-top: 24px;
+      font-size: 12px;
+      color: #64748b;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon-wrapper">📞</div>
+    <h1>Twilio Voice Connect</h1>
+    <p class="subtitle">Click the button below to trigger an immediate automated outbound call to your configured phone number.</p>
+
+    <button id="callBtn" class="call-btn" onclick="triggerCall()">
+      <span>📞 Call Me</span>
+    </button>
+
+    <div id="statusBox" class="status-box"></div>
+
+    <div class="meta">Powered by Twilio Voice & Flask Backend</div>
+  </div>
+
+  <script>
+    async function triggerCall() {
+      const callBtn = document.getElementById('callBtn');
+      const statusBox = document.getElementById('statusBox');
+
+      // Update UI state to calling
+      callBtn.disabled = true;
+      callBtn.innerHTML = '<span>⏳ Placing Call...</span>';
+      statusBox.className = 'status-box info';
+      statusBox.textContent = 'Calling... Contacting Twilio API to initiate the call.';
+
+      // Display the required "Calling..." alert
+      alert('Calling...');
+
+      // Determine endpoint URL (supports both HTTP server and file:// execution)
+      let endpoint = '/call';
+      if (!window.location.protocol.startsWith('http')) {
+        endpoint = 'http://127.0.0.1:5001/call';
+      }
+
+      try {
+        let response;
+        try {
+          response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          });
+        } catch (fetchErr) {
+          // If file:// on 5001 failed, try 5000 as fallback
+          if (!window.location.protocol.startsWith('http')) {
+            endpoint = 'http://127.0.0.1:5000/call';
+            response = await fetch(endpoint, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' }
+            });
+          } else {
+            throw fetchErr;
+          }
+        }
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          statusBox.className = 'status-box success';
+          statusBox.textContent = `Call initiated successfully! SID: ${data.call_sid}`;
+          alert(`Call placed successfully!\nCall SID: ${data.call_sid}`);
+        } else {
+          const errorMsg = data.error || 'Unknown error occurred while initiating call.';
+          statusBox.className = 'status-box error';
+          statusBox.textContent = `Error: ${errorMsg}`;
+          alert(`Failed to place call: ${errorMsg}`);
+        }
+      } catch (err) {
+        const errorMsg = err.message || 'Could not connect to Flask server.';
+        statusBox.className = 'status-box error';
+        statusBox.textContent = `Network Error: ${errorMsg}. Make sure the Flask server is running on http://127.0.0.1:5000.`;
+        alert(`Failed to place call: ${errorMsg}`);
+      } finally {
+        // Reset button state
+        callBtn.disabled = false;
+        callBtn.innerHTML = '<span>📞 Call Me</span>';
+      }
+    }
+  </script>
+</body>
+</html>
