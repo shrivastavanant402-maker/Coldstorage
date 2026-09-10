@@ -1,12 +1,18 @@
 import React from 'react';
 import { useColdChainStore } from '../store/useColdChainStore';
-import { X } from 'lucide-react';
+import { X, PhoneCall } from 'lucide-react';
 import { RiskBadge, TimeRemainingBadge } from './RiskBadge';
 
 export const ShipmentModal: React.FC = () => {
-  const { isModalOpen, selectedModalShipment, modalAnalysis, closeShipmentModal } = useColdChainStore();
+  const { isModalOpen, selectedModalShipment, modalAnalysis, closeShipmentModal, openEmergencyModal } = useColdChainStore();
 
   if (!isModalOpen || !selectedModalShipment) return null;
+
+  // Red-flag condition: cargo will spoil BEFORE it's delivered
+  const isSpoilingBeforeDelivery =
+    modalAnalysis?.time_to_spoilage_hours !== undefined &&
+    modalAnalysis?.eta_hours !== undefined &&
+    modalAnalysis.time_to_spoilage_hours < modalAnalysis.eta_hours;
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -87,10 +93,23 @@ export const ShipmentModal: React.FC = () => {
           </div>
         )}
 
-        <div className="flex justify-end pt-2 border-t border-[#D9D7D0]">
+        <div className="flex items-center justify-between pt-2 border-t border-[#D9D7D0]">
+          {/* Salvage call button — only visible when cargo spoils before delivery */}
+          {isSpoilingBeforeDelivery && (
+            <button
+              onClick={() => {
+                closeShipmentModal();
+                openEmergencyModal(selectedModalShipment);
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 active:bg-rose-800 rounded-full transition-colors shadow-sm animate-pulse"
+            >
+              <PhoneCall className="w-3.5 h-3.5" />
+              Spoiling before delivery — Call nearest warehouse
+            </button>
+          )}
           <button
             onClick={closeShipmentModal}
-            className="px-6 py-2.5 text-xs font-semibold uppercase tracking-wider text-white bg-[#181818] hover:bg-black rounded-full transition-colors shadow-sm"
+            className="px-6 py-2.5 text-xs font-semibold uppercase tracking-wider text-white bg-[#181818] hover:bg-black rounded-full transition-colors shadow-sm ml-auto"
           >
             Done
           </button>

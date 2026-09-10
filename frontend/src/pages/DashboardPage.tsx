@@ -5,6 +5,7 @@ import { RiskBadge } from '../components/RiskBadge';
 import Globe3D from '../components/globe/Globe3D';
 import { RoutePathData } from '../components/globe/RouteLayer';
 import { Link } from 'react-router-dom';
+import { EmergencySalvageModal } from '../components/EmergencySalvageModal';
 
 export const DashboardPage: React.FC = () => {
   const { shipments, fetchInitialData, openShipmentModal, routeOptions, findOptimalRoutes, isLoading } = useColdChainStore();
@@ -63,7 +64,8 @@ export const DashboardPage: React.FC = () => {
   ).length;
 
   return (
-    <div className="p-6 md:p-10 space-y-8 max-w-[1600px] mx-auto bg-[#FAF9F5]">
+    <>
+      <div className="p-6 md:p-10 space-y-8 max-w-[1600px] mx-auto bg-[#FAF9F5]">
       {/* Top Welcome & Mission Control Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-[#D9D7D0] pb-6">
         <div>
@@ -398,5 +400,8 @@ export const DashboardPage: React.FC = () => {
         </div>
       </div>
     </div>
+    {/* Emergency Salvage Modal — mounted here so it can be triggered from ShipmentModal on the dashboard */}
+    <EmergencySalvageModal />
+    </>
   );
 };
