@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Viewer } from 'resium';
 import { Ion, Cartesian3, Math as CesiumMath, Viewer as CesiumViewer } from 'cesium';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -84,6 +84,30 @@ export const Globe3D: React.FC<Globe3DProps> = ({
   const [selectedRoute, setSelectedRoute] = useState<RoutePathData>(routes[0]);
   const [showWeather, setShowWeather] = useState(true);
   const [showShipment, setShowShipment] = useState(true);
+
+  // Set 3D World Terrain with vertex normals
+  useEffect(() => {
+    const viewer = viewerRef.current?.cesiumElement;
+    if (viewer) {
+      const createTerrain = (CesiumMath as any).createWorldTerrainAsync || (CesiumMath as any).createWorldTerrain;
+      // Also try Ion/Terrain loaders
+      import('cesium').then((c) => {
+        const createFn = c.createWorldTerrainAsync || (c as any).createWorldTerrain;
+        if (createFn) {
+          Promise.resolve(
+            createFn({
+              requestWaterMask: false,
+              requestVertexNormals: true,
+            })
+          ).then((provider: any) => {
+            if (viewer && !viewer.isDestroyed() && provider) {
+              viewer.terrainProvider = provider;
+            }
+          }).catch(() => {});
+        }
+      }).catch(() => {});
+    }
+  }, []);
 
   const flyToRoute = (route: RoutePathData) => {
     const viewer = viewerRef.current?.cesiumElement;

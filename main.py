@@ -10,7 +10,7 @@ from models import (
     Shipment, Driver, Business,
     AnalyzeShipmentRequest, AnalyzeShipmentResponse,
     OptimizeRouteRequest, OptimizeRouteResponse,
-    PredictSpoilageResponse,
+    PredictSpoilageResponse, SingleShipmentSpoilageResponse,
     AssignShipmentRequest, AssignShipmentResponse,
     SimulateCallRequest, SimulateCallResponse, DialogueTurn,
     WeatherResponse
@@ -151,6 +151,52 @@ async def predict_spoilage(file: UploadFile = File(...)):
         model_metrics=metrics,
         feature_importance=ml_model.feature_importance_,
         sample_predictions=sample_preds
+    )
+
+# 3b. GET /api/predict-spoilage/{shipment_id} (Instant live-demo per-shipment spoilage check)
+GOODS_BASE_VALUES = {
+    "Vaccines": 50000.0,
+    "Biopharmaceuticals": 65000.0,
+    "Frozen Seafood": 22000.0,
+    "Prime Cut Meat": 18000.0,
+    "Dairy Products": 12000.0,
+    "Fresh Produce": 8000.0
+}
+DEFAULT_BASE_VALUE = 15000.0
+
+@app.get("/api/predict-spoilage/{shipment_id}", response_model=SingleShipmentSpoilageResponse, tags=["Logistics Analytics"])
+def predict_shipment_spoilage(shipment_id: str):
+    shipment = next((s for s in db_shipments if s.shipment_id.upper() == shipment_id.upper()), None)
+    if not shipment:
+        raise HTTPException(status_code=404, detail=f"Shipment '{shipment_id}' not found.")
+
+    features = {
+        'distance_km': shipment.distance_km,
+        'transit_hours': shipment.transit_hours,
+        'avg_temperature': shipment.avg_temperature,
+        'temp_variance': shipment.temp_variance,
+        'humidity': shipment.humidity,
+        'vehicle_age': shipment.vehicle_age,
+        'weather_severity': shipment.weather_severity
+    }
+    risk_score, risk_level, confidence, _ = ml_model.predict_risk(features)
+
+    # Spoilage probability (0.0 to 1.0)
+    spoilage_prob = round(risk_score / 100.0, 3)
+
+    # Time to spoilage in hours (higher risk = shorter buffer before spoilage)
+    time_to_spoilage = max(1.5, round(48.0 * (1.0 - (risk_score / 100.0) ** 0.8), 1))
+
+    # Estimated monetary loss based on cargo commodity base valuation
+    base_val = GOODS_BASE_VALUES.get(shipment.goods_type, DEFAULT_BASE_VALUE)
+    estimated_loss = round(base_val * (risk_score / 100.0), 2)
+
+    return SingleShipmentSpoilageResponse(
+        shipment_id=shipment.shipment_id,
+        spoilage_probability=spoilage_prob,
+        time_to_spoilage_hrs=time_to_spoilage,
+        estimated_loss_usd=estimated_loss,
+        risk_level=risk_level
     )
 
 # 4. GET /api/weather/{location}

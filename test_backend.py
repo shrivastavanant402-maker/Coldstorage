@@ -60,8 +60,20 @@ def run_tests():
     }
     r = requests.post(f"{BASE_URL}/api/optimize-route", json=payload_route)
     data = r.json()
-    passed = r.status_code == 200 and "routes" in data and len(data["routes"]) == 3
-    log_test("Optimize Route (POST /api/optimize-route)", passed, f"Generated {len(data.get('routes', []))} routes")
+    routes = data.get("routes", [])
+    valid_waypoints = (
+        len(routes) == 3 and
+        all(isinstance(rt.get("waypoints"), list) and len(rt["waypoints"]) >= 3 for rt in routes) and
+        all(isinstance(wp.get("lat"), (int, float)) and isinstance(wp.get("lng"), (int, float))
+            for rt in routes for wp in rt["waypoints"])
+    )
+    # Check that route waypoints are distinct
+    distinct_curves = (
+        routes[0]["waypoints"][2]["lat"] != routes[1]["waypoints"][2]["lat"] and
+        routes[0]["waypoints"][2]["lat"] != routes[2]["waypoints"][2]["lat"]
+    )
+    passed = r.status_code == 200 and valid_waypoints and distinct_curves
+    log_test("Optimize Route (POST /api/optimize-route)", passed, f"Generated {len(routes)} routes with distinct {len(routes[0]['waypoints'])}-pt coordinate waypoints")
 
     # 3. POST /api/predict-spoilage
     csv_data = io.StringIO("""distance_km,transit_hours,avg_temperature,temp_variance,humidity,vehicle_age,weather_severity,spoilage_flag
@@ -82,11 +94,37 @@ def run_tests():
     passed = r.status_code == 200 and "model_metrics" in data
     log_test("Predict Spoilage CSV (POST /api/predict-spoilage)", passed, f"Accuracy: {data.get('model_metrics', {}).get('cv_mean_accuracy')}")
 
+    # 3b. GET /api/predict-spoilage/{shipment_id}
+    r_single = requests.get(f"{BASE_URL}/api/predict-spoilage/SHP-1001")
+    data_single = r_single.json()
+    passed_single = (
+        r_single.status_code == 200 and
+        data_single.get("shipment_id") == "SHP-1001" and
+        "spoilage_probability" in data_single and
+        "time_to_spoilage_hrs" in data_single and
+        "estimated_loss_usd" in data_single and
+        "risk_level" in data_single
+    )
+    log_test(
+        "Single Spoilage Check (GET /api/predict-spoilage/{id})",
+        passed_single,
+        f"Prob: {data_single.get('spoilage_probability')} | Loss: ${data_single.get('estimated_loss_usd', 0):,.2f} | Time: {data_single.get('time_to_spoilage_hrs')} hrs"
+    )
+
     # 4. GET /api/weather/{location}
     r = requests.get(f"{BASE_URL}/api/weather/mumbai")
     data = r.json()
-    passed = r.status_code == 200 and "temperature" in data
-    log_test("Weather Service (GET /api/weather/{location})", passed, f"{data.get('temperature')}°C - {data.get('condition')}")
+    r_severe = requests.get(f"{BASE_URL}/api/weather/severe-zone")
+    data_severe = r_severe.json()
+    passed = (
+        r.status_code == 200 and "temperature" in data and "alerts" in data and isinstance(data["alerts"], list) and
+        r_severe.status_code == 200 and len(data_severe.get("alerts", [])) > 0
+    )
+    log_test(
+        "Weather Service (GET /api/weather/{location})",
+        passed,
+        f"{data.get('temperature')}°C ({data.get('condition')}) | Severe alerts: {len(data_severe.get('alerts', []))}"
+    )
 
     # 5. POST /api/assign-shipment
     r = requests.post(f"{BASE_URL}/api/assign-shipment", json={"shipment_id": "SHP-1001", "driver_id": "DRV-001"})

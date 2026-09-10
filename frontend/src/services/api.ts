@@ -1,5 +1,5 @@
 import api from '../api/client';
-import { Shipment, Driver, RouteOption, AnalyzeShipmentResponse, Business, SimulateCallResponse } from '../types';
+import { Shipment, Driver, RouteOption, AnalyzeShipmentResponse, Business, SimulateCallResponse, SingleShipmentSpoilageResponse } from '../types';
 
 export const FALLBACK_SHIPMENTS: Shipment[] = [
   {
@@ -137,7 +137,11 @@ export const coldChainApi = {
           cost_usd: 3050.0,
           risk_score: 32.0,
           risk_level: 'Medium',
-          waypoints: [payload.origin, 'Express Bypass', payload.destination],
+          waypoints: [
+            { lat: 19.076, lng: 72.8777 },
+            { lat: 23.6366, lng: 75.5678 },
+            { lat: 28.7041, lng: 77.1025 },
+          ],
           description: 'Priority freight speed optimization.',
         },
         {
@@ -149,7 +153,11 @@ export const coldChainApi = {
           cost_usd: 2780.0,
           risk_score: 12.0,
           risk_level: 'Low',
-          waypoints: [payload.origin, 'Thermal Shaded Valley', payload.destination],
+          waypoints: [
+            { lat: 19.076, lng: 72.8777 },
+            { lat: 22.9606, lng: 77.1083 },
+            { lat: 28.7041, lng: 77.1025 },
+          ],
           description: '22% lower emissions, optimal thermal stability.',
         }
       ];
@@ -197,6 +205,11 @@ export const coldChainApi = {
       shipment_id: shipmentId,
       discount_percent: discountPercent,
     });
+    return res.data;
+  },
+
+  async predictSpoilage(shipmentId: string): Promise<SingleShipmentSpoilageResponse> {
+    const res = await api.get<SingleShipmentSpoilageResponse>(`/api/predict-spoilage/${shipmentId}`);
     return res.data;
   },
 };

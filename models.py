@@ -83,7 +83,7 @@ class RouteOption(BaseModel):
     cost_usd: float
     risk_score: float
     risk_level: str
-    waypoints: List[str]
+    waypoints: List[Dict[str, float]]
     description: str
 
 class OptimizeRouteResponse(BaseModel):
@@ -100,6 +100,13 @@ class PredictSpoilageResponse(BaseModel):
     model_metrics: Dict[str, Any]
     feature_importance: Dict[str, float]
     sample_predictions: List[Dict[str, Any]]
+
+class SingleShipmentSpoilageResponse(BaseModel):
+    shipment_id: str
+    spoilage_probability: float
+    time_to_spoilage_hrs: float
+    estimated_loss_usd: float
+    risk_level: str
 
 class AssignShipmentRequest(BaseModel):
     shipment_id: str
@@ -143,3 +150,4 @@ class WeatherResponse(BaseModel):
     weather_severity: float
     wind_speed: float
     source: str
+    alerts: List[str] = []

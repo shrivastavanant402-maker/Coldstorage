@@ -56,6 +56,11 @@ export interface SimulateCallResponse {
   transcript: DialogueTurn[];
 }
 
+export interface Coordinate {
+  lat: number;
+  lng: number;
+}
+
 export interface RouteOption {
   route_name: string;
   route_type: string;
@@ -65,7 +70,7 @@ export interface RouteOption {
   cost_usd: number;
   risk_score: number;
   risk_level: string;
-  waypoints: string[];
+  waypoints: Coordinate[];
   description: string;
 }
 
@@ -90,4 +95,12 @@ export interface SavingsState {
   fuelSavedGal: number;
   co2ReducedTon: number;
   spoilageAvoidedUsd: number;
+}
+
+export interface SingleShipmentSpoilageResponse {
+  shipment_id: string;
+  spoilage_probability: number;
+  time_to_spoilage_hrs: number;
+  estimated_loss_usd: number;
+  risk_level: string;
 }
