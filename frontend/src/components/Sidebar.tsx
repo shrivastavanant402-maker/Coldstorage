@@ -1,14 +1,13 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Compass, Package, PiggyBank, Truck, Globe } from 'lucide-react';
+import { LayoutDashboard, Compass, Package, PiggyBank, Truck } from 'lucide-react';
 
 const NAV_ITEMS = [
-  { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+  { name: 'Dashboard', path: '/', icon: LayoutDashboard },
   { name: 'Routes', path: '/routes', icon: Compass },
   { name: 'Shipments', path: '/shipments', icon: Package },
   { name: 'Savings', path: '/savings', icon: PiggyBank },
   { name: 'Driver View', path: '/driver', icon: Truck },
-  { name: 'Lumio Showcase', path: '/', icon: Globe },
 ];
 
 export const Sidebar: React.FC = () => {
@@ -18,11 +17,11 @@ export const Sidebar: React.FC = () => {
         {/* Brand header */}
         <div className="h-18 flex items-center px-5 py-4 border-b border-[#D9D7D0] gap-3">
           <div className="w-8 h-8 rounded-full bg-[#181818] flex items-center justify-center text-white shadow-sm shrink-0">
-            <span className="font-bold text-sm leading-none font-display">L</span>
+            <span className="font-bold text-sm leading-none font-display">C</span>
           </div>
           <div>
             <h1 className="font-display font-bold text-sm text-[#1B1B1B] tracking-tight">
-              Lumio ColdChain
+              ColdChain AI
             </h1>
             <p className="text-[10px] text-[#8C8880] uppercase tracking-wider font-semibold">
               Risk Intelligence
@@ -38,6 +37,7 @@ export const Sidebar: React.FC = () => {
               <NavLink
                 key={item.path}
                 to={item.path}
+                end={item.path === '/'}
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all ${
                     isActive

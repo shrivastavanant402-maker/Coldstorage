@@ -1,10 +1,10 @@
 import React from 'react';
-import { useLocation, useNavigate, Link } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useColdChainStore } from '../store/useColdChainStore';
-import { ShieldCheck, UserCheck, ArrowLeft } from 'lucide-react';
+import { ShieldCheck, UserCheck } from 'lucide-react';
 
 const PAGE_TITLES: Record<string, string> = {
-  '/': 'Lumio Showcase',
+  '/': 'Logistics & Risk Telemetry',
   '/dashboard': 'Logistics & Risk Telemetry',
   '/routes': '3D Corridor Intelligence',
   '/shipments': 'Active Reefers & Risk Manifest',
@@ -23,7 +23,7 @@ export const TopBar: React.FC = () => {
     if (role === 'driver' && location.pathname !== '/driver') {
       navigate('/driver');
     } else if (role === 'owner' && location.pathname === '/driver') {
-      navigate('/dashboard');
+      navigate('/');
     }
   };
 
@@ -37,20 +37,11 @@ export const TopBar: React.FC = () => {
       </div>
 
       <div className="flex items-center gap-3">
-        {/* Return to Showcase link */}
-        <Link
-          to="/"
-          className="hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-[#8C8880] hover:text-[#181818] transition-colors"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          Showcase
-        </Link>
-
         {/* Role Switcher Capsule */}
         <div className="flex items-center bg-[#E9E8E4] p-1 rounded-full border border-[#D9D7D0]">
           <button
             onClick={() => handleRoleSwitch('owner')}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold tracking-wide uppercase transition-all ${
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wide uppercase transition-all ${
               userRole === 'owner'
                 ? 'bg-[#181818] text-white shadow-sm'
                 : 'text-[#615E58] hover:text-[#181818]'
@@ -62,7 +53,7 @@ export const TopBar: React.FC = () => {
 
           <button
             onClick={() => handleRoleSwitch('driver')}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold tracking-wide uppercase transition-all ${
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wide uppercase transition-all ${
               userRole === 'driver'
                 ? 'bg-[#181818] text-white shadow-sm'
                 : 'text-[#615E58] hover:text-[#181818]'

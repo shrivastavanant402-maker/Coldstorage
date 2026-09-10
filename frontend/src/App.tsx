@@ -29,11 +29,15 @@ export const App: React.FC = () => {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Lumio Showcase Landing Page */}
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/landing" element={<LandingPage />} />
-
-        {/* Operational Console Routes */}
+        {/* Operational Dashboard Console */}
+        <Route
+          path="/"
+          element={
+            <ConsoleLayout>
+              <DashboardPage />
+            </ConsoleLayout>
+          }
+        />
         <Route
           path="/dashboard"
           element={
@@ -74,6 +78,9 @@ export const App: React.FC = () => {
             </ConsoleLayout>
           }
         />
+
+        {/* Landing Page */}
+        <Route path="/landing" element={<LandingPage />} />
       </Routes>
     </BrowserRouter>
   );
