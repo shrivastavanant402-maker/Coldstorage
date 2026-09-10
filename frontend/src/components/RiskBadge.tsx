@@ -8,18 +8,18 @@ interface Props {
 export const RiskBadge: React.FC<Props> = ({ level = 'Low', score }) => {
   const norm = level.toLowerCase();
 
-  let style = 'bg-teal-50 text-[#0D9488] border-teal-200';
+  let style = 'bg-emerald-50 text-emerald-800 border-emerald-200';
   if (norm === 'medium') {
-    style = 'bg-amber-50 text-[#D97706] border-amber-200';
+    style = 'bg-amber-50 text-amber-800 border-amber-200';
   } else if (norm === 'high') {
-    style = 'bg-red-50 text-[#DC2626] border-red-200';
+    style = 'bg-rose-50 text-rose-800 border-rose-200';
   } else if (norm === 'critical') {
-    style = 'bg-red-100 text-red-900 border-red-300 font-semibold';
+    style = 'bg-[#181818] text-white border-black font-semibold shadow-sm';
   }
 
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] border font-medium ${style}`}>
-      <span className="w-1.5 h-1.5 rounded-full bg-current" />
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] border font-semibold uppercase tracking-wider ${style}`}>
+      <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" />
       {level} {score !== undefined ? `(${score}%)` : ''}
     </span>
   );
