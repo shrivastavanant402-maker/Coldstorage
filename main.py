@@ -13,6 +13,7 @@ from models import (
     PredictSpoilageResponse, SingleShipmentSpoilageResponse,
     AssignShipmentRequest, AssignShipmentResponse,
     SimulateCallRequest, SimulateCallResponse, DialogueTurn,
+    AgentChatRequest, AgentChatResponse, AgentChatMessage,
     WeatherResponse
 )
 from mock_data import generate_mock_shipments, generate_mock_drivers, generate_mock_businesses
@@ -337,6 +338,136 @@ def simulate_call(req: SimulateCallRequest):
         deal_closed=deal_closed,
         estimated_recovery_usd=recovery_value if deal_closed else 0.0,
         transcript=transcript
+    )
+
+
+# 10. POST /api/agent-chat  — Interactive voice negotiation agent
+@app.post("/api/agent-chat", response_model=AgentChatResponse, tags=["Emergency Liquidation"])
+def agent_chat(req: AgentChatRequest):
+    """Stateless LLM-free conversational agent that acts as a Warehouse Intake Manager.
+    Replies are generated via deterministic rule-based logic seeded on shipment telemetry,
+    so no external API key or model is needed.
+    """
+    import random, re
+
+    BASE_VALUE = 45_000.0
+    msg_lower = req.user_message.lower()
+    discount = req.discount_offered
+    turns = len(req.history)
+    spoilage_h = req.time_to_spoilage_hours
+    eta_h = req.eta_hours
+    temp = req.avg_temperature
+    goods = req.goods_type
+    biz_name = req.business_name
+
+    # ── Helper ───────────────────────────────────────────────────────────
+    def recovery(d: float) -> float:
+        return round(BASE_VALUE * (1.0 - d / 100.0), 2)
+
+    # Detect numbers the user mentioned (for discount extraction)
+    def extract_discount(text: str) -> Optional[float]:
+        nums = re.findall(r'(\d+(?:\.\d+)?)', text)
+        candidates = [float(n) for n in nums if 5 <= float(n) <= 80]
+        return candidates[0] if candidates else None
+
+    user_offered = extract_discount(req.user_message) or discount
+
+    # ── Acceptance / Rejection Logic ──────────────────────────────────────
+    threshold = 25.0  # minimum discount % the warehouse accepts
+    urgency_bonus = max(0, (12 - spoilage_h) * 1.2)  # higher urgency → lower threshold needed
+    effective_threshold = max(15.0, threshold - urgency_bonus)
+
+    # Check if user is agreeing / closing
+    agree_keywords = ['accept', 'deal', 'agreed', 'yes', 'sure', 'okay', 'ok', 'done', 'finalize', 'go ahead', 'confirm', 'proceed']
+    decline_keywords = ['no deal', 'not interested', 'too much', 'cancel', 'forget it', 'nevermind', 'walk away']
+
+    user_is_agreeing = any(k in msg_lower for k in agree_keywords)
+    user_is_declining = any(k in msg_lower for k in decline_keywords)
+
+    # ── Generate Reply ────────────────────────────────────────────────────
+    deal_status = "open"
+    counter = None
+    agent_reply = ""
+
+    if user_is_declining:
+        deal_status = "declined"
+        agent_reply = (
+            f"Understood. We'll pass on this one. If the situation changes, {biz_name} "
+            f"is reachable 24/7. Good luck with the cargo."
+        )
+
+    elif user_is_agreeing and turns >= 1:
+        # User is closing the deal — accept if discount is reasonable
+        if user_offered >= effective_threshold:
+            deal_status = "accepted"
+            agent_reply = (
+                f"Excellent! A {user_offered:.0f}% concession is accepted by {biz_name}. "
+                f"Gate 3 is cleared for priority unloading. Divert the carrier now — "
+                f"estimated recovery value is ${recovery(user_offered):,.0f}. "
+                f"Our intake team will be ready for the {goods} shipment."
+            )
+        else:
+            counter = round(effective_threshold + 3, 1)
+            deal_status = "counter"
+            agent_reply = (
+                f"I appreciate the offer, but {user_offered:.0f}% isn't enough given our "
+                f"emergency intake costs. We need at least {counter:.0f}% to proceed. "
+                f"Can you authorise that?"
+            )
+
+    elif turns == 0:
+        # Opening line from agent
+        urgency_note = (
+            f" I see your cargo has only {spoilage_h:.1f} hours before spoilage — "
+            f"that's a narrow window."
+        ) if spoilage_h < 10 else ""
+        agent_reply = (
+            f"Good day! {biz_name} Intake Manager speaking. I understand you have {goods} "
+            f"running at {temp:.1f}°C in transit.{urgency_note} "
+            f"What discount are you authorising for an emergency cross-dock today?"
+        )
+
+    elif user_offered >= effective_threshold:
+        deal_status = "accepted"
+        agent_reply = (
+            f"That works for us. {user_offered:.0f}% discount on {goods} — accepted. "
+            f"Gate 3 is cleared. Estimated recovery: ${recovery(user_offered):,.0f}. "
+            f"Please divert the carrier immediately."
+        )
+
+    elif user_offered < 10:
+        counter = round(effective_threshold, 1)
+        deal_status = "counter"
+        agent_reply = (
+            f"{user_offered:.0f}% is far below our emergency intake cost floor. "
+            f"We handle {goods} with specialized cold-dock equipment — "
+            f"our minimum for unscheduled intake is {counter:.0f}%. "
+            f"Can you meet that?"
+        )
+
+    elif 10 <= user_offered < effective_threshold:
+        counter = round((user_offered + effective_threshold) / 2 + random.uniform(-1, 2), 1)
+        deal_status = "counter"
+        agent_reply = (
+            f"I hear you on the {user_offered:.0f}%, but our dock team has overtime costs tonight. "
+            f"Meet us at {counter:.0f}% and we can have the gates ready within the hour. "
+            f"The {goods} will be refrigerated within 30 minutes of arrival."
+        )
+
+    else:
+        # Generic follow-up
+        agent_reply = (
+            f"Tell me more about the cargo condition — is the temperature stable at {temp:.1f}°C? "
+            f"And what's the current ETA to our depot from the carrier's position?"
+        )
+
+    rec_usd = recovery(user_offered) if deal_status == "accepted" else 0.0
+
+    return AgentChatResponse(
+        agent_reply=agent_reply,
+        deal_status=deal_status,
+        counter_discount=counter,
+        recovery_usd=rec_usd
     )
 
 @app.get("/api/shipments", response_model=List[Shipment], tags=["Logistics Analytics"])

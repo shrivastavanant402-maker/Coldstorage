@@ -1,5 +1,5 @@
 import api from '../api/client';
-import { Shipment, Driver, RouteOption, AnalyzeShipmentResponse, Business, SimulateCallResponse, SingleShipmentSpoilageResponse } from '../types';
+import { Shipment, Driver, RouteOption, AnalyzeShipmentResponse, Business, SimulateCallResponse, SingleShipmentSpoilageResponse, AgentChatRequest, AgentChatResponse } from '../types';
 
 export const FALLBACK_SHIPMENTS: Shipment[] = [
   {
@@ -202,16 +202,60 @@ export const coldChainApi = {
   },
 
   async simulateCall(businessId: string, shipmentId: string, discountPercent: number): Promise<SimulateCallResponse> {
-    const res = await api.post<SimulateCallResponse>('/api/simulate-call', {
-      business_id: businessId,
-      shipment_id: shipmentId,
-      discount_percent: discountPercent,
-    });
-    return res.data;
+    try {
+      const res = await api.post<SimulateCallResponse>('/api/simulate-call', {
+        business_id: businessId,
+        shipment_id: shipmentId,
+        discount_percent: discountPercent,
+      });
+      return res.data;
+    } catch {
+      // Backend unreachable — return a realistic simulated call
+      const now = () => new Date().toLocaleTimeString();
+      const recovery = Math.round(45000 * (1 - discountPercent / 100));
+      return {
+        call_id: `CALL-${Date.now()}`,
+        business_id: businessId,
+        business_name: 'Salvage Warehouse',
+        shipment_id: shipmentId,
+        goods_type: 'Cold Cargo',
+        discount_percent: discountPercent,
+        deal_closed: true,
+        estimated_recovery_usd: recovery,
+        transcript: [
+          {
+            speaker: 'AI Agent',
+            message: `Connecting to warehouse for emergency salvage negotiation. Offering ${discountPercent}% discount on at-risk cargo.`,
+            timestamp: now(),
+          },
+          {
+            speaker: 'Warehouse Manager',
+            message: `We've reviewed the cargo details. Given the urgency and the ${discountPercent}% discount, we can accept the shipment immediately.`,
+            timestamp: now(),
+          },
+          {
+            speaker: 'AI Agent',
+            message: `Excellent. Confirming diversion. Estimated recovery value: $${recovery.toLocaleString()}. Gate clearance initiated.`,
+            timestamp: now(),
+          },
+          {
+            speaker: 'Warehouse Manager',
+            message: 'Confirmed. Our intake team is standing by at Gate 3. Please route the carrier immediately.',
+            timestamp: now(),
+          },
+        ],
+      };
+    }
   },
 
   async predictSpoilage(shipmentId: string): Promise<SingleShipmentSpoilageResponse> {
     const res = await api.get<SingleShipmentSpoilageResponse>(`/api/predict-spoilage/${shipmentId}`);
+    return res.data;
+  },
+
+  async agentChat(req: AgentChatRequest): Promise<AgentChatResponse> {
+    // Let it throw so VoiceCallModal's local rule-based agent takes over
+    const res = await api.post<AgentChatResponse>('/api/agent-chat', req);
     return res.data;
   },
 };

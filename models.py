@@ -144,6 +144,30 @@ class SimulateCallResponse(BaseModel):
     estimated_recovery_usd: float
     transcript: List[DialogueTurn]
 
+# --- Voice / Interactive Agent Chat ---
+
+class AgentChatMessage(BaseModel):
+    role: str  # "user" | "agent"
+    text: str
+
+class AgentChatRequest(BaseModel):
+    shipment_id: str
+    business_id: str
+    business_name: str
+    goods_type: str
+    avg_temperature: float
+    time_to_spoilage_hours: float
+    eta_hours: float
+    discount_offered: float
+    history: List[AgentChatMessage] = []
+    user_message: str
+
+class AgentChatResponse(BaseModel):
+    agent_reply: str
+    deal_status: str          # "open" | "accepted" | "declined" | "counter"
+    counter_discount: Optional[float] = None   # agent's counter-offer if any
+    recovery_usd: float = 0.0
+
 class WeatherResponse(BaseModel):
     location: str
     temperature: float

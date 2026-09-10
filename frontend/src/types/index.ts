@@ -106,3 +106,30 @@ export interface SingleShipmentSpoilageResponse {
   estimated_loss_usd: number;
   risk_level: string;
 }
+
+// --- Voice Agent Chat ---
+export interface AgentChatMessage {
+  role: 'user' | 'agent';
+  text: string;
+}
+
+export interface AgentChatRequest {
+  shipment_id: string;
+  business_id: string;
+  business_name: string;
+  goods_type: string;
+  avg_temperature: number;
+  time_to_spoilage_hours: number;
+  eta_hours: number;
+  discount_offered: number;
+  history: AgentChatMessage[];
+  user_message: string;
+}
+
+export interface AgentChatResponse {
+  agent_reply: string;
+  deal_status: 'open' | 'accepted' | 'declined' | 'counter';
+  counter_discount?: number;
+  recovery_usd: number;
+}
+
