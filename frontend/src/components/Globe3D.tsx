@@ -9,9 +9,34 @@ Cesium.Ion.defaultAccessToken =
 
 interface Props {
   routeCoordinates?: number[][];  // passed from parent
+  distanceKm?: number;
 }
 
-export default function Globe3D({ routeCoordinates = [] }: Props) {
+const clamp = (val: number, min: number, max: number) => Math.min(Math.max(val, min), max);
+
+function computeHaversineKm(coords: number[][]): number {
+  if (coords.length < 2) return 0;
+  let total = 0;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  for (let i = 0; i < coords.length - 1; i++) {
+    const [lon1, lat1] = coords[i];
+    const [lon2, lat2] = coords[i + 1];
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    total += 6371 * c;
+  }
+  return Math.round(total);
+}
+
+export default function Globe3D({ routeCoordinates = [], distanceKm }: Props) {
+  const effectiveDistance =
+    distanceKm && distanceKm > 0 ? distanceKm : computeHaversineKm(routeCoordinates);
+  const durationSeconds = clamp(effectiveDistance / 8, 45, 120);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
   const [viewer, setViewer] = useState<Cesium.Viewer | null>(null);
 
@@ -79,7 +104,11 @@ export default function Globe3D({ routeCoordinates = [] }: Props) {
 
       {/* Moving vehicle with camera follow */}
       {routeCoordinates.length > 1 && (
-        <ShipmentMarker routeCoordinates={routeCoordinates} viewer={viewer} />
+        <ShipmentMarker
+          routeCoordinates={routeCoordinates}
+          viewer={viewer}
+          durationSeconds={durationSeconds}
+        />
       )}
     </Viewer>
   );

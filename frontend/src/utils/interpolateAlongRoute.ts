@@ -6,46 +6,45 @@ export function getPositionAlongRoute(
   progress: number,         // 0 to 1
   viewer?: Cesium.Viewer | null
 ): Cesium.Cartesian3 {
-  if (coordinates.length === 0) return Cesium.Cartesian3.ZERO;
+  if (!coordinates || coordinates.length === 0) return Cesium.Cartesian3.ZERO;
   if (coordinates.length === 1) {
-    const [lon, lat, elev = 0] = coordinates[0];
-    if (viewer?.scene?.globe) {
-      const terrainHeight = viewer.scene.globe.getHeight(
-        Cesium.Cartographic.fromDegrees(lon, lat)
-      ) || 0;
-      return Cesium.Cartesian3.fromDegrees(lon, lat, terrainHeight + 2);
-    }
-    return Cesium.Cartesian3.fromDegrees(lon, lat, elev);
+    const [lon, lat] = coordinates[0];
+    return Cesium.Cartesian3.fromDegrees(lon, lat, 0);
   }
 
+  const clampedProgress = Math.min(Math.max(progress, 0), 1);
   const totalSegments = coordinates.length - 1;
-  const scaled = progress * totalSegments;
+  const scaled = clampedProgress * totalSegments;
   const idx = Math.min(Math.floor(scaled), totalSegments - 1);
   const frac = scaled - idx;
 
-  const [lon1, lat1, alt1 = 0] = coordinates[idx];
-  const [lon2, lat2, alt2 = 0] = coordinates[idx + 1];
+  const wp1 = coordinates[idx];
+  const wp2 = coordinates[idx + 1];
+  const lon1 = wp1[0];
+  const lat1 = wp1[1];
+  const lon2 = wp2[0];
+  const lat2 = wp2[1];
 
   const lon = lon1 + (lon2 - lon1) * frac;
   const lat = lat1 + (lat2 - lat1) * frac;
 
+  let elev = 0;
   if (viewer?.scene?.globe) {
-    const terrainHeight = viewer.scene.globe.getHeight(
-      Cesium.Cartographic.fromDegrees(lon, lat)
-    ) || 0;
-    return Cesium.Cartesian3.fromDegrees(lon, lat, terrainHeight + 2);
+    elev = viewer.scene.globe.getHeight(Cesium.Cartographic.fromDegrees(lon, lat)) || 0;
   }
 
-  const alt = alt1 + (alt2 - alt1) * frac;
-  return Cesium.Cartesian3.fromDegrees(lon, lat, alt + 3); // +3m to lift slightly above road
+  return Cesium.Cartesian3.fromDegrees(lon, lat, elev);
 }
 
 export function getHeadingAlongRoute(
   coordinates: number[][],
   progress: number
 ): number {
+  if (!coordinates || coordinates.length < 2) return 0;
+
+  const clampedProgress = Math.min(Math.max(progress, 0), 1);
   const totalSegments = coordinates.length - 1;
-  const scaled = progress * totalSegments;
+  const scaled = clampedProgress * totalSegments;
   const idx = Math.min(Math.floor(scaled), totalSegments - 1);
 
   const [lon1, lat1] = coordinates[idx];
@@ -53,5 +52,10 @@ export function getHeadingAlongRoute(
 
   const dLon = lon2 - lon1;
   const dLat = lat2 - lat1;
-  return Math.atan2(dLon, dLat) * (180 / Math.PI);
+
+  // atan2(dLon, dLat) returns angle in radians clockwise from North
+  let headingDeg = Math.atan2(dLon, dLat) * (180 / Math.PI);
+  if (headingDeg < 0) headingDeg += 360;
+  return headingDeg;
 }
+

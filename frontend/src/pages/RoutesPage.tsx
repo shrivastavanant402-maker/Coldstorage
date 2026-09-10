@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useColdChainStore } from '../store/useColdChainStore';
-import { Search, Clock, Leaf, DollarSign, ShieldCheck, ArrowRight, Navigation } from 'lucide-react';
+import { Search, Clock, Leaf, DollarSign, ShieldCheck, ArrowRight, Navigation, MapPin, Loader2, Sparkles } from 'lucide-react';
 import { RiskBadge } from '../components/RiskBadge';
 import Globe3D from '../components/Globe3D';
 import { Globe3D as MultiRouteGlobe } from '../components/globe/Globe3D';
@@ -16,23 +16,48 @@ export const RoutesPage: React.FC = () => {
   const [vehicleType, setVehicleType] = useState('Refrigerated Semi-Trailer');
 
   const [routeCoords, setRouteCoords] = useState<number[][]>([]);
-  const [activeView, setActiveView] = useState<'3d-chase' | 'overview'>('3d-chase');
+  const [activeView, setActiveView] = useState<'3d-chase' | 'overview'>('overview');
+  const [selectedRouteIndex, setSelectedRouteIndex] = useState<number | null>(null);
 
-  const handleSearch = async () => {
-    const origin: [number, number] = [77.2090, 28.6139];  // Delhi [lon, lat]
-    const destination: [number, number] = [72.8777, 19.0760]; // Mumbai
-    const coords = await getRoute(origin, destination);
-    setRouteCoords(coords);
+  const presets = [
+    { label: 'Mumbai → Delhi', origin: 'Mumbai, India', destination: 'Delhi, India', dist: '1,415 km' },
+    { label: 'Bengaluru → Chennai', origin: 'Bengaluru, India', destination: 'Chennai, India', dist: '346 km' },
+    { label: 'Hyderabad → Delhi', origin: 'Hyderabad, India', destination: 'Delhi, India', dist: '1,570 km' },
+    { label: 'Mumbai → Kolkata', origin: 'Mumbai, India', destination: 'Kolkata, India', dist: '1,950 km' },
+    { label: 'Ahmedabad → Mumbai', origin: 'Ahmedabad, India', destination: 'Mumbai, India', dist: '524 km' },
+  ];
+
+  const handlePresetClick = (presetOrigin: string, presetDest: string) => {
+    setOrigin(presetOrigin);
+    setDestination(presetDest);
+    findOptimalRoutes(presetOrigin, presetDest, goodsType, vehicleType);
   };
 
+  // Initial load: fetch real road-optimized corridors
   useEffect(() => {
-    handleSearch();
+    findOptimalRoutes(origin, destination, goodsType, vehicleType);
   }, []);
+
+  // When route options update, sync routeCoords to the selected corridor's road geometry
+  useEffect(() => {
+    if (selectedRouteIndex !== null && routeOptions && routeOptions.length > 0) {
+      const active = routeOptions[selectedRouteIndex];
+      if (active && active.waypoints && active.waypoints.length > 0) {
+        const coords = active.waypoints.map((wp: any) => [
+          typeof wp === 'object' ? wp.lng : 0,
+          typeof wp === 'object' ? wp.lat : 0,
+          0
+        ]);
+        setRouteCoords(coords);
+        return;
+      }
+    }
+    setRouteCoords([]);
+  }, [routeOptions, selectedRouteIndex]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     findOptimalRoutes(origin, destination, goodsType, vehicleType);
-    handleSearch();
   };
 
   const globeRoutes: RoutePathData[] = routeOptions.map((opt, i) => {
@@ -67,22 +92,30 @@ export const RoutesPage: React.FC = () => {
 
         <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
           <div>
-            <label className="block font-medium text-gray-700 mb-1">Origin Hub</label>
+            <label className="block font-medium text-gray-700 mb-1 flex items-center gap-1">
+              <MapPin className="w-3 h-3 text-indigo-600" />
+              Origin Hub
+            </label>
             <input
               type="text"
               value={origin}
               onChange={(e) => setOrigin(e.target.value)}
+              placeholder="e.g. Mumbai, India"
               className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5]"
               required
             />
           </div>
 
           <div>
-            <label className="block font-medium text-gray-700 mb-1">Destination Hub</label>
+            <label className="block font-medium text-gray-700 mb-1 flex items-center gap-1">
+              <Navigation className="w-3 h-3 text-emerald-600" />
+              Destination Hub
+            </label>
             <input
               type="text"
               value={destination}
               onChange={(e) => setDestination(e.target.value)}
+              placeholder="e.g. Delhi, India"
               className="w-full px-3 py-2 border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5]"
               required
             />
@@ -110,11 +143,43 @@ export const RoutesPage: React.FC = () => {
               disabled={isLoading}
               className="w-full bg-[#4F46E5] hover:bg-indigo-700 text-white font-medium text-xs py-2 px-4 rounded-lg flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
             >
-              <Search className="w-3.5 h-3.5" />
-              {isLoading ? 'Optimizing...' : 'Find Optimal Route'}
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Optimizing...</span>
+                </>
+              ) : (
+                <>
+                  <Search className="w-3.5 h-3.5" />
+                  <span>Find Optimal Route</span>
+                </>
+              )}
             </button>
           </div>
         </form>
+
+        {/* Quick Presets */}
+        <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-gray-100">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 flex items-center gap-1">
+            <Sparkles className="w-3 h-3 text-amber-500" />
+            Quick Presets:
+          </span>
+          {presets.map((preset) => (
+            <button
+              key={preset.label}
+              type="button"
+              onClick={() => handlePresetClick(preset.origin, preset.destination)}
+              className={`text-[11px] px-2 py-0.5 rounded-md border transition-all ${
+                origin === preset.origin && destination === preset.destination
+                  ? 'bg-indigo-50 border-indigo-300 text-indigo-700 font-semibold'
+                  : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              {preset.label}
+              <span className="text-[10px] text-gray-400 ml-1">({preset.dist})</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* 3D Visualizer & Globe Section */}
@@ -152,23 +217,39 @@ export const RoutesPage: React.FC = () => {
             >
               Corridor Network
             </button>
-            <button
-              type="button"
-              onClick={handleSearch}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300 flex items-center gap-1 transition-all"
-              title="Fetch ORS Road Geometry"
-            >
-              <Search className="w-3.5 h-3.5 text-[#4F46E5]" />
-              Fetch Route
-            </button>
           </div>
         </div>
 
         <div className="h-[460px] rounded-card overflow-hidden border border-[#E5E7EB] bg-[#0B0F19]">
           {activeView === '3d-chase' ? (
-            <Globe3D routeCoordinates={routeCoords} />
+            selectedRouteIndex !== null && routeCoords.length > 1 ? (
+              <Globe3D
+                routeCoordinates={routeCoords}
+                distanceKm={routeOptions[selectedRouteIndex]?.distance_km}
+              />
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center p-6 text-center text-gray-400">
+                <Navigation className="w-8 h-8 text-indigo-400 mb-2 opacity-60" />
+                <p className="text-sm font-semibold text-gray-200">No Route Selected</p>
+                <p className="text-xs text-gray-400 mt-1 max-w-sm">
+                  Click on a corridor card below to start the 3D chase camera and animate the refrigerated vehicle along the road.
+                </p>
+              </div>
+            )
           ) : (
-            <MultiRouteGlobe routes={globeRoutes} height="460px" />
+            <MultiRouteGlobe
+              routes={globeRoutes}
+              height="460px"
+              selectedRouteId={selectedRouteIndex !== null ? globeRoutes[selectedRouteIndex]?.id : null}
+              onRouteSelected={(r) => {
+                if (!r) {
+                  setSelectedRouteIndex(null);
+                } else {
+                  const fIdx = globeRoutes.findIndex((gr) => gr.id === r.id);
+                  if (fIdx >= 0) setSelectedRouteIndex(fIdx);
+                }
+              }}
+            />
           )}
         </div>
       </div>
@@ -176,75 +257,152 @@ export const RoutesPage: React.FC = () => {
       {routeOptions.length > 0 && (
         <div className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {routeOptions.map((route, idx) => (
-              <div
-                key={idx}
-                className="bg-white border border-[#E5E7EB] rounded-card p-5 shadow-subtle flex flex-col justify-between hover:border-[#4F46E5] transition-colors"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
-                      {route.route_type}
-                    </span>
-                    <RiskBadge level={route.risk_level} score={route.risk_score} />
-                  </div>
-
-                  <h4 className="text-sm font-bold text-gray-900 mb-1">{route.route_name}</h4>
-                  <p className="text-[11px] text-gray-500 mb-3">{route.description}</p>
-
-                  <div className="grid grid-cols-2 gap-2 mb-3 text-xs">
-                    <div className="p-2 bg-[#F9FAFB] rounded-lg border border-[#E5E7EB]">
-                      <span className="text-gray-400 block text-[10px]">Transit Duration</span>
-                      <span className="font-semibold text-gray-900">{route.transit_hours} hrs ({route.distance_km} km)</span>
+            {routeOptions.map((route, idx) => {
+              const isSelected = selectedRouteIndex === idx;
+              const simDurationSec = Math.round(
+                Math.min(Math.max(route.distance_km / 8, 45), 120)
+              );
+              return (
+                <div
+                  key={idx}
+                  className={`bg-white border rounded-card p-5 shadow-subtle flex flex-col justify-between transition-all ${
+                    isSelected
+                      ? 'border-[#4F46E5] ring-2 ring-indigo-200 shadow-md'
+                      : 'border-[#E5E7EB] hover:border-gray-400'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+                        {route.route_type}
+                      </span>
+                      <RiskBadge level={route.risk_level} score={route.risk_score} />
                     </div>
-                    <div className="p-2 bg-[#F9FAFB] rounded-lg border border-[#E5E7EB]">
-                      <span className="text-gray-400 block text-[10px]">Carbon Emission</span>
-                      <span className="font-semibold text-[#0D9488]">{route.carbon_kg} kg CO2</span>
-                    </div>
-                    <div className="p-2 bg-[#F9FAFB] rounded-lg border border-[#E5E7EB]">
-                      <span className="text-gray-400 block text-[10px]">Estimated Cost</span>
-                      <span className="font-semibold text-gray-900">${route.cost_usd}</span>
-                    </div>
-                    <div className="p-2 bg-[#F9FAFB] rounded-lg border border-[#E5E7EB]">
-                      <span className="text-gray-400 block text-[10px]">Risk Score</span>
-                      <span className="font-semibold text-[#4F46E5]">{route.risk_score} / 100</span>
-                    </div>
-                  </div>
 
-                  <div className="text-[11px] text-gray-500 mb-3">
-                    <span className="font-medium text-gray-700 block mb-1">Waypoints:</span>
-                    <div className="flex flex-wrap items-center gap-1 text-[10px]">
-                      {route.waypoints.map((wp, wIdx) => {
-                        const isStart = wIdx === 0;
-                        const isEnd = wIdx === route.waypoints.length - 1;
-                        const label = typeof wp === 'string'
-                          ? wp
-                          : isStart
-                          ? `Start (${wp.lat.toFixed(2)}°, ${wp.lng.toFixed(2)}°)`
-                          : isEnd
-                          ? `End (${wp.lat.toFixed(2)}°, ${wp.lng.toFixed(2)}°)`
-                          : `WP${wIdx} (${wp.lat.toFixed(2)}°, ${wp.lng.toFixed(2)}°)`;
+                    <h4 className="text-sm font-bold text-gray-900 mb-1">{route.route_name}</h4>
+                    <p className="text-[11px] text-gray-500 mb-3">{route.description}</p>
 
-                        return (
-                          <React.Fragment key={wIdx}>
-                            <span className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-700 font-mono text-[9px]">
-                              {label}
+                    <div className="grid grid-cols-2 gap-2 mb-3 text-xs">
+                      <div className="p-2 bg-[#F9FAFB] rounded-lg border border-[#E5E7EB]">
+                        <span className="text-gray-400 block text-[10px]">Transit Duration</span>
+                        <span className="font-semibold text-gray-900">{route.transit_hours} hrs ({route.distance_km} km)</span>
+                        <span className="text-[10px] text-indigo-600 font-medium block mt-0.5">
+                          ⚡ 3D Pace: {simDurationSec}s
+                        </span>
+                      </div>
+                      <div className="p-2 bg-[#F9FAFB] rounded-lg border border-[#E5E7EB]">
+                        <span className="text-gray-400 block text-[10px]">Carbon Emission</span>
+                        <span className="font-semibold text-[#0D9488]">{route.carbon_kg} kg CO2</span>
+                      </div>
+                      <div className="p-2 bg-[#F9FAFB] rounded-lg border border-[#E5E7EB]">
+                        <span className="text-gray-400 block text-[10px]">Estimated Cost</span>
+                        <span className="font-semibold text-gray-900">${route.cost_usd}</span>
+                      </div>
+                      <div className="p-2 bg-[#F9FAFB] rounded-lg border border-[#E5E7EB]">
+                        <span className="text-gray-400 block text-[10px]">Risk Score</span>
+                        <span className="font-semibold text-[#4F46E5]">{route.risk_score} / 100</span>
+                      </div>
+                    </div>
+
+                    <div className="text-[11px] text-gray-500 mb-3">
+                      {route.waypoints.length > 8 ? (
+                        <div>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="font-medium text-gray-700">Road Snapped Geometry:</span>
+                            <span className="text-[10px] font-mono font-medium text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                              {route.waypoints.length.toLocaleString()} Coordinates (OSRM)
                             </span>
-                            {wIdx < route.waypoints.length - 1 && (
-                              <ArrowRight className="w-2.5 h-2.5 text-gray-400" />
-                            )}
-                          </React.Fragment>
-                        );
-                      })}
+                          </div>
+                          {(() => {
+                            const pts = route.waypoints;
+                            const len = pts.length;
+                            const indices = [0, Math.floor(len * 0.25), Math.floor(len * 0.5), Math.floor(len * 0.75), len - 1];
+                            return (
+                              <div className="flex flex-wrap items-center gap-1 text-[10px]">
+                                {indices.map((wIdx, i) => {
+                                  const wp = pts[wIdx];
+                                  const isStart = i === 0;
+                                  const isEnd = i === indices.length - 1;
+                                  const label = isStart ? 'Start' : isEnd ? 'Dest' : `Mile ${Math.round((wIdx / len) * 100)}%`;
+                                  return (
+                                    <React.Fragment key={i}>
+                                      <span
+                                        className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-700 font-mono text-[9px]"
+                                        title={`${wp.lat.toFixed(4)}°, ${wp.lng.toFixed(4)}°`}
+                                      >
+                                        {label} ({wp.lat.toFixed(2)}°, {wp.lng.toFixed(2)}°)
+                                      </span>
+                                      {i < indices.length - 1 && (
+                                        <ArrowRight className="w-2.5 h-2.5 text-gray-400" />
+                                      )}
+                                    </React.Fragment>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      ) : (
+                        <div>
+                          <span className="font-medium text-gray-700 block mb-1">Waypoints:</span>
+                          <div className="flex flex-wrap items-center gap-1 text-[10px]">
+                            {route.waypoints.map((wp, wIdx) => {
+                              const isStart = wIdx === 0;
+                              const isEnd = wIdx === route.waypoints.length - 1;
+                              const label = typeof wp === 'string'
+                                ? wp
+                                : isStart
+                                ? `Start (${wp.lat.toFixed(2)}°, ${wp.lng.toFixed(2)}°)`
+                                : isEnd
+                                ? `End (${wp.lat.toFixed(2)}°, ${wp.lng.toFixed(2)}°)`
+                                : `WP${wIdx} (${wp.lat.toFixed(2)}°, ${wp.lng.toFixed(2)}°)`;
+
+                              return (
+                                <React.Fragment key={wIdx}>
+                                  <span className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-700 font-mono text-[9px]">
+                                    {label}
+                                  </span>
+                                  {wIdx < route.waypoints.length - 1 && (
+                                    <ArrowRight className="w-2.5 h-2.5 text-gray-400" />
+                                  )}
+                                </React.Fragment>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
-                </div>
 
-                <button className="w-full py-1.5 bg-gray-900 hover:bg-black text-white text-xs font-medium rounded-lg transition-colors">
-                  Select Corridor
-                </button>
-              </div>
-            ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isSelected) {
+                        setSelectedRouteIndex(null);
+                        setRouteCoords([]);
+                      } else {
+                        setSelectedRouteIndex(idx);
+                        const coords = route.waypoints.map((wp: any) => [
+                          typeof wp === 'object' ? wp.lng : 0,
+                          typeof wp === 'object' ? wp.lat : 0,
+                          0
+                        ]);
+                        setRouteCoords(coords);
+                        setActiveView('3d-chase');
+                      }
+                    }}
+                    className={`w-full py-2 text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5 ${
+                      isSelected
+                        ? 'bg-[#4F46E5] text-white shadow-sm ring-2 ring-indigo-200'
+                        : 'bg-gray-900 hover:bg-black text-white'
+                    }`}
+                  >
+                    <Navigation className="w-3.5 h-3.5" />
+                    {isSelected ? 'Active Simulator Corridor (Click to Deselect)' : 'Select Corridor & Drive 3D'}
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

@@ -97,8 +97,8 @@ def analyze_shipment(req: AnalyzeShipmentRequest):
 
 # 2. POST /api/optimize-route
 @app.post("/api/optimize-route", response_model=OptimizeRouteResponse, tags=["Route Optimization"])
-def optimize_route(req: OptimizeRouteRequest):
-    routes = generate_route_options(
+async def optimize_route(req: OptimizeRouteRequest):
+    routes = await generate_route_options(
         origin=req.origin,
         destination=req.destination,
         goods_type=req.goods_type,

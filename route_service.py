@@ -1,8 +1,10 @@
 import math
 import random
-from typing import List, Dict
+from typing import List, Dict, Any, Optional
+import httpx
 from models import RouteOption
 from ml_service import ColdChainRiskModel
+from weather_service import fetch_weather_for_location
 
 # Lookup table of approximate city center coordinates (lat, lng)
 CITY_COORDINATES: Dict[str, Dict[str, float]] = {
@@ -84,20 +86,67 @@ def generate_curved_waypoints(
     for i in range(num_points):
         t = i / (num_points - 1)
         if i == 0:
-            waypoints.append({"lat": round(lat1, 4), "lng": round(lng1, 4)})
+            waypoints.append({"lat": round(lat1, 5), "lng": round(lng1, 5)})
         elif i == num_points - 1:
-            waypoints.append({"lat": round(lat2, 4), "lng": round(lng2, 4)})
+            waypoints.append({"lat": round(lat2, 5), "lng": round(lng2, 5)})
         else:
             base_lat = lat1 + t * d_lat
             base_lng = lng1 + t * d_lng
-            # Sinusoidal displacement peaking around the midpoint
             arch = math.sin(t * math.pi)
             offset = arch * curve_factor * chord
-            wp_lat = round(base_lat + (offset * perp_lat), 4)
-            wp_lng = round(base_lng + (offset * perp_lng), 4)
+            wp_lat = round(base_lat + (offset * perp_lat), 5)
+            wp_lng = round(base_lng + (offset * perp_lng), 5)
             waypoints.append({"lat": wp_lat, "lng": wp_lng})
 
     return waypoints
+
+async def get_road_route(
+    origin_coords: Dict[str, float],
+    dest_coords: Dict[str, float]
+) -> List[Dict[str, Any]]:
+    """
+    Calls OSRM public demo server to retrieve real road-snapped geometry.
+    Note: OSRM takes {orig_lng},{orig_lat};{dest_lng},{dest_lat} order.
+    Returns up to 3 alternative routes with {distance_km, transit_hours, waypoints}.
+    """
+    orig_lng = origin_coords.get("lng", 0.0)
+    orig_lat = origin_coords.get("lat", 0.0)
+    dest_lng = dest_coords.get("lng", 0.0)
+    dest_lat = dest_coords.get("lat", 0.0)
+
+    url = (
+        f"http://router.project-osrm.org/route/v1/driving/"
+        f"{orig_lng},{orig_lat};{dest_lng},{dest_lat}"
+        f"?alternatives=true&geometries=geojson&overview=full"
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=4.0) as client:
+            res = await client.get(url)
+            if res.status_code == 200:
+                data = res.json()
+                if data.get("code") == "Ok" and data.get("routes"):
+                    routes_out = []
+                    for r in data["routes"][:3]:
+                        dist_m = float(r.get("distance", 0.0))
+                        dur_s = float(r.get("duration", 0.0))
+                        coords_raw = r.get("geometry", {}).get("coordinates", [])
+                        waypoints = [
+                            {"lat": round(float(pt[1]), 5), "lng": round(float(pt[0]), 5)}
+                            for pt in coords_raw
+                        ]
+                        routes_out.append({
+                            "distance_km": round(dist_m / 1000.0, 1),
+                            "transit_hours": round(dur_s / 3600.0, 1),
+                            "waypoints": waypoints,
+                            "raw_duration": dur_s,
+                            "raw_distance": dist_m,
+                        })
+                    return routes_out
+    except Exception as e:
+        print(f"[OSRM] Notice: Road route lookup failed ({e}), falling back to synthetic curves.")
+
+    return []
 
 VEHICLE_EMISSION_FACTORS = {
     "Refrigerated Semi-Trailer": {"co2_per_km": 0.95, "base_cost_km": 2.40, "age": 3.0},
@@ -113,108 +162,187 @@ def calculate_base_distance(origin: str, dest: str) -> float:
     hash_val = abs(hash(f"{origin}->{dest}")) % 1200
     return round(600.0 + hash_val, 1)
 
-def generate_route_options(
+async def generate_route_options(
     origin: str,
     destination: str,
     goods_type: str,
     vehicle_type: str,
     ml_model: ColdChainRiskModel
 ) -> List[RouteOption]:
-    base_dist = calculate_base_distance(origin, destination)
-    v_params = VEHICLE_EMISSION_FACTORS.get(vehicle_type, DEFAULT_VEHICLE)
-
+    """
+    Generates 3 optimized cold-chain corridors using real OSRM road geometry,
+    live weather severity, and ML-driven risk profiles.
+    """
     orig_coords = resolve_coordinates(origin)
     dest_coords = resolve_coordinates(destination)
+    v_params = VEHICLE_EMISSION_FACTORS.get(vehicle_type, DEFAULT_VEHICLE)
 
-    # Route 1: Express Highway Route
-    dist_1 = round(base_dist * 0.98, 1)
-    time_1 = round(dist_1 / 85.0, 1)
-    co2_1 = round(dist_1 * v_params["co2_per_km"], 1)
-    cost_1 = round((dist_1 * v_params["base_cost_km"]) + (time_1 * 28.0), 2)
-    features_1 = {
-        'distance_km': dist_1,
-        'transit_hours': time_1,
-        'avg_temperature': 4.8,
-        'temp_variance': 2.1,
-        'humidity': 62.0,
-        'vehicle_age': v_params["age"],
-        'weather_severity': 2.6
+    # 1. Fetch live weather severity for origin & destination
+    try:
+        orig_w = await fetch_weather_for_location(origin)
+        dest_w = await fetch_weather_for_location(destination)
+        weather_severity = round(max(orig_w.weather_severity, dest_w.weather_severity), 1)
+    except Exception:
+        weather_severity = 2.0
+
+    # 2. Goods-specific sensitivity profile
+    GOODS_PROFILES = {
+        "Vaccines": {"target_temp": 3.4, "base_variance": 0.8, "humidity": 55.0, "risk_mult": 1.25},
+        "Biopharmaceuticals": {"target_temp": 3.0, "base_variance": 0.7, "humidity": 50.0, "risk_mult": 1.30},
+        "Frozen Seafood": {"target_temp": -18.0, "base_variance": 1.5, "humidity": 70.0, "risk_mult": 1.15},
+        "Prime Cut Meat": {"target_temp": 1.5, "base_variance": 1.2, "humidity": 65.0, "risk_mult": 1.10},
+        "Dairy Products": {"target_temp": 3.8, "base_variance": 1.4, "humidity": 68.0, "risk_mult": 1.05},
+        "Fresh Produce": {"target_temp": 5.2, "base_variance": 1.8, "humidity": 80.0, "risk_mult": 1.00},
     }
-    risk_1, level_1, _, _ = ml_model.predict_risk(features_1)
-
-    waypoints_1 = generate_curved_waypoints(orig_coords, dest_coords, curve_factor=0.06, num_points=5)
-
-    route_1 = RouteOption(
-        route_name="Interstate High-Speed Express",
-        route_type="Fastest Express",
-        distance_km=dist_1,
-        transit_hours=time_1,
-        carbon_kg=co2_1,
-        cost_usd=cost_1,
-        risk_score=risk_1,
-        risk_level=level_1,
-        waypoints=waypoints_1,
-        description="Priority freight lanes. Shortest transit duration, ideal for immediate deliveries with active telemetry."
+    goods_prof = GOODS_PROFILES.get(
+        goods_type,
+        {"target_temp": 4.0, "base_variance": 1.2, "humidity": 62.0, "risk_mult": 1.0}
     )
 
-    # Route 2: Cold-Chain Eco Corridor
-    dist_2 = round(base_dist * 1.05, 1)
-    time_2 = round(dist_2 / 72.0, 1)
-    co2_2 = round(dist_2 * (v_params["co2_per_km"] * 0.78), 1)
-    cost_2 = round((dist_2 * (v_params["base_cost_km"] * 0.90)) + (time_2 * 24.0), 2)
-    features_2 = {
-        'distance_km': dist_2,
-        'transit_hours': time_2,
-        'avg_temperature': 3.6,
-        'temp_variance': 0.8,
-        'humidity': 60.0,
-        'vehicle_age': v_params["age"],
-        'weather_severity': 1.4
-    }
-    risk_2, level_2, _, _ = ml_model.predict_risk(features_2)
-    waypoints_2 = generate_curved_waypoints(orig_coords, dest_coords, curve_factor=0.22, num_points=5)
+    # 3. Call OSRM public demo server for real road routes (timeout 4s)
+    osrm_routes = await get_road_route(orig_coords, dest_coords)
 
-    route_2 = RouteOption(
+    # 4. Assemble up to 3 candidate routes
+    candidates: List[Dict[str, Any]] = []
+    if osrm_routes:
+        # Use available OSRM road routes
+        for i, r in enumerate(osrm_routes):
+            candidates.append({
+                "distance_km": r["distance_km"],
+                "transit_hours": r["transit_hours"],
+                "waypoints": r["waypoints"],
+                "is_osrm": True,
+                "variant_index": i
+            })
+
+        primary = osrm_routes[0]
+        # Synthesize remaining slots if OSRM returned fewer than 3 alternatives
+        if len(candidates) == 1:
+            candidates.append({
+                "distance_km": round(primary["distance_km"] * 1.06, 1),
+                "transit_hours": round(primary["transit_hours"] * 1.12, 1),
+                "waypoints": generate_curved_waypoints(orig_coords, dest_coords, curve_factor=0.18, num_points=25),
+                "is_osrm": False,
+                "variant_index": 1
+            })
+            candidates.append({
+                "distance_km": round(primary["distance_km"] * 1.02, 1),
+                "transit_hours": round(primary["transit_hours"] * 1.05, 1),
+                "waypoints": generate_curved_waypoints(orig_coords, dest_coords, curve_factor=-0.14, num_points=25),
+                "is_osrm": False,
+                "variant_index": 2
+            })
+        elif len(candidates) == 2:
+            candidates.append({
+                "distance_km": round(primary["distance_km"] * 1.04, 1),
+                "transit_hours": round(primary["transit_hours"] * 1.08, 1),
+                "waypoints": generate_curved_waypoints(orig_coords, dest_coords, curve_factor=-0.15, num_points=25),
+                "is_osrm": False,
+                "variant_index": 2
+            })
+    else:
+        # Complete fallback to synthetic curves if OSRM failed completely
+        base_dist = calculate_base_distance(origin, destination)
+        candidates = [
+            {
+                "distance_km": round(base_dist * 0.98, 1),
+                "transit_hours": round(base_dist * 0.98 / 85.0, 1),
+                "waypoints": generate_curved_waypoints(orig_coords, dest_coords, curve_factor=0.06, num_points=5),
+                "is_osrm": False,
+                "variant_index": 0
+            },
+            {
+                "distance_km": round(base_dist * 1.05, 1),
+                "transit_hours": round(base_dist * 1.05 / 72.0, 1),
+                "waypoints": generate_curved_waypoints(orig_coords, dest_coords, curve_factor=0.22, num_points=5),
+                "is_osrm": False,
+                "variant_index": 1
+            },
+            {
+                "distance_km": round(base_dist * 1.01, 1),
+                "transit_hours": round(base_dist * 1.01 / 78.0, 1),
+                "waypoints": generate_curved_waypoints(orig_coords, dest_coords, curve_factor=-0.18, num_points=5),
+                "is_osrm": False,
+                "variant_index": 2
+            }
+        ]
+
+    # 5. Evaluate ML risk score for each candidate factoring in weather and variance
+    for c in candidates:
+        idx = c.get("variant_index", 0)
+        # Thermal variance modifier: eco detour avoids urban heat islands, express has open highway speeds
+        var_factor = 0.75 if idx == 1 else (1.10 if idx == 0 else 0.92)
+        variance = round(goods_prof["base_variance"] * var_factor, 2)
+
+        feat = {
+            'distance_km': c["distance_km"],
+            'transit_hours': c["transit_hours"],
+            'avg_temperature': round(goods_prof["target_temp"] + (weather_severity * 0.25), 1),
+            'temp_variance': variance,
+            'humidity': goods_prof["humidity"],
+            'vehicle_age': v_params["age"],
+            'weather_severity': weather_severity
+        }
+        r_score, r_level, _, _ = ml_model.predict_risk(feat)
+        adjusted_score = round(min(98.0, max(5.0, r_score * goods_prof["risk_mult"])), 1)
+        c["risk_score"] = adjusted_score
+        c["risk_level"] = r_level
+
+    # 6. Classification rule (Requirement 6):
+    # - Shortest OSRM duration becomes Fastest Express
+    # - Lowest weather-adjusted risk becomes Eco Corridor
+    # - Remaining route becomes Balanced Commercial
+    sorted_by_duration = sorted(candidates, key=lambda x: (x["transit_hours"], x["distance_km"]))
+    fastest = sorted_by_duration[0]
+
+    remaining_for_eco = [x for x in candidates if x != fastest]
+    if remaining_for_eco:
+        remaining_for_eco.sort(key=lambda x: (x["risk_score"], x["transit_hours"]))
+        eco = remaining_for_eco[0]
+        balanced = [x for x in candidates if x != fastest and x != eco][0]
+    else:
+        eco = fastest
+        balanced = fastest
+
+    # Build final RouteOptions
+    route_fastest = RouteOption(
+        route_name="National Highway Express (Fastest)",
+        route_type="Fastest Express",
+        distance_km=fastest["distance_km"],
+        transit_hours=fastest["transit_hours"],
+        carbon_kg=round(fastest["distance_km"] * v_params["co2_per_km"] * 1.02, 1),
+        cost_usd=round((fastest["distance_km"] * v_params["base_cost_km"] * 1.05) + (fastest["transit_hours"] * 30.0), 2),
+        risk_score=fastest["risk_score"],
+        risk_level=fastest["risk_level"],
+        waypoints=fastest["waypoints"],
+        description="Fastest road routing via primary national expressways. Minimizes transit duration, ideal for time-critical deliveries."
+    )
+
+    route_eco = RouteOption(
         route_name="Greenway Cold-Chain Eco Spine",
         route_type="Cold-Chain Eco Corridor",
-        distance_km=dist_2,
-        transit_hours=time_2,
-        carbon_kg=co2_2,
-        cost_usd=cost_2,
-        risk_score=risk_2,
-        risk_level=level_2,
-        waypoints=waypoints_2,
-        description="Low ambient temperature corridor avoiding heat-island zones and urban traffic delays."
+        distance_km=eco["distance_km"],
+        transit_hours=eco["transit_hours"],
+        carbon_kg=round(eco["distance_km"] * v_params["co2_per_km"] * 0.78, 1),
+        cost_usd=round((eco["distance_km"] * v_params["base_cost_km"] * 0.88) + (eco["transit_hours"] * 24.0), 2),
+        risk_score=eco["risk_score"],
+        risk_level=eco["risk_level"],
+        waypoints=eco["waypoints"],
+        description="Lowest thermal risk corridor avoiding intense weather severity zones and heat islands to preserve cargo integrity."
     )
 
-    # Route 3: Balanced Commercial Route
-    dist_3 = round(base_dist * 1.01, 1)
-    time_3 = round(dist_3 / 78.0, 1)
-    co2_3 = round(dist_3 * (v_params["co2_per_km"] * 0.91), 1)
-    cost_3 = round((dist_3 * (v_params["base_cost_km"] * 0.82)) + (time_3 * 22.0), 2)
-    features_3 = {
-        'distance_km': dist_3,
-        'transit_hours': time_3,
-        'avg_temperature': 4.1,
-        'temp_variance': 1.4,
-        'humidity': 65.0,
-        'vehicle_age': v_params["age"],
-        'weather_severity': 2.0
-    }
-    risk_3, level_3, _, _ = ml_model.predict_risk(features_3)
-    waypoints_3 = generate_curved_waypoints(orig_coords, dest_coords, curve_factor=-0.18, num_points=5)
-
-    route_3 = RouteOption(
-        route_name="Standard Commercial Highway",
+    route_balanced = RouteOption(
+        route_name="Commercial Arterial Highway",
         route_type="Balanced Commercial",
-        distance_km=dist_3,
-        transit_hours=time_3,
-        carbon_kg=co2_3,
-        cost_usd=cost_3,
-        risk_score=risk_3,
-        risk_level=level_3,
-        waypoints=waypoints_3,
-        description="Economical routing avoiding peak tolls while maintaining compliant refrigeration metrics."
+        distance_km=balanced["distance_km"],
+        transit_hours=balanced["transit_hours"],
+        carbon_kg=round(balanced["distance_km"] * v_params["co2_per_km"] * 0.90, 1),
+        cost_usd=round((balanced["distance_km"] * v_params["base_cost_km"] * 0.95) + (balanced["transit_hours"] * 26.0), 2),
+        risk_score=balanced["risk_score"],
+        risk_level=balanced["risk_level"],
+        waypoints=balanced["waypoints"],
+        description="Balanced logistics corridor optimizing freight cost, toll avoidance, and standard refrigeration margins."
     )
 
-    return [route_1, route_2, route_3]
+    return [route_fastest, route_eco, route_balanced]
+

@@ -53,6 +53,7 @@ export const RouteLayer: React.FC<RouteLayerProps> = ({
               <PolylineGraphics
                 positions={polylinePositions}
                 width={isSelected ? 6 : 3.5}
+                clampToGround={true}
                 material={
                   new PolylineGlowMaterialProperty({
                     glowPower: isSelected ? 0.35 : 0.18,
